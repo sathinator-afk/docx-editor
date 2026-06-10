@@ -1056,16 +1056,22 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     getCachedStyleResolver,
   });
 
-  const { handleFormat, handleInsertTable, handleInsertPageBreak, handleInsertTOC } =
-    useFormattingActions({
-      getActiveEditorView,
-      focusActiveEditor,
-      pagedEditorRef,
-      lastSelectionRef,
-      hyperlinkDialog,
-      historyStateRef,
-      getCachedStyleResolver,
-    });
+  const {
+    handleFormat,
+    handleInsertTable,
+    handleInsertPageBreak,
+    handleInsertSectionBreakNextPage,
+    handleInsertSectionBreakContinuous,
+    handleInsertTOC,
+  } = useFormattingActions({
+    getActiveEditorView,
+    focusActiveEditor,
+    pagedEditorRef,
+    lastSelectionRef,
+    hyperlinkDialog,
+    historyStateRef,
+    getCachedStyleResolver,
+  });
 
   const handleZoomChange = useCallback((zoom: number) => {
     setState((prev) => ({ ...prev, zoom }));
@@ -1667,6 +1673,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             onInsertTable={handleInsertTable}
             onInsertImage={handleInsertImageClick}
             onInsertPageBreak={handleInsertPageBreak}
+            onInsertSectionBreakNextPage={handleInsertSectionBreakNextPage}
+            onInsertSectionBreakContinuous={handleInsertSectionBreakContinuous}
             onInsertTOC={handleInsertTOC}
             onImageWrapType={handleImageWrapType}
             onImageTransform={handleImageTransform}

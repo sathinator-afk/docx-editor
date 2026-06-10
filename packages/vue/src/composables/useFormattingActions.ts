@@ -14,6 +14,10 @@ import { getCachedNumberingMap } from '@eigenpal/docx-editor-core/docx';
 import { clearFormatting } from '@eigenpal/docx-editor-core/prosemirror/commands/formatting';
 import { insertPageBreak } from '@eigenpal/docx-editor-core/prosemirror/commands/pageBreak';
 import {
+  insertSectionBreakNextPage,
+  insertSectionBreakContinuous,
+} from '@eigenpal/docx-editor-core/prosemirror/commands/sectionBreak';
+import {
   applyFormatting as applyFormattingCore,
   setParagraphStyle as setParagraphStyleCore,
   type ApplyFormattingOptions,
@@ -70,6 +74,20 @@ export function useFormattingActions(opts: UseFormattingActionsOptions) {
     view.focus();
   }
 
+  function handleInsertSectionBreakNextPage() {
+    const view = opts.editorView.value;
+    if (!view) return;
+    insertSectionBreakNextPage(view.state, (tr) => view.dispatch(tr), view);
+    view.focus();
+  }
+
+  function handleInsertSectionBreakContinuous() {
+    const view = opts.editorView.value;
+    if (!view) return;
+    insertSectionBreakContinuous(view.state, (tr) => view.dispatch(tr), view);
+    view.focus();
+  }
+
   function handleInsertSymbol(symbol: string) {
     const view = targetView();
     if (!view) return;
@@ -98,6 +116,8 @@ export function useFormattingActions(opts: UseFormattingActionsOptions) {
     handleClearFormatting,
     handleApplyStyle,
     handleInsertPageBreak,
+    handleInsertSectionBreakNextPage,
+    handleInsertSectionBreakContinuous,
     handleInsertSymbol,
     applyFormatting,
     setParagraphStyle,
