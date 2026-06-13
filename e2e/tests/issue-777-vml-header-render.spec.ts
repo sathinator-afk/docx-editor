@@ -23,6 +23,13 @@ test('VML header logo renders and a left-anchored image is left-aligned (#777)',
   const headerSrc = await headerImg.getAttribute('src');
   expect(headerSrc && headerSrc.length).toBeGreaterThan(0);
 
+  // Aspect ratio is preserved: the shape style is 120pt × 40pt → 3:1, and the
+  // painted image must keep that ratio (not stretch to a square / box).
+  const box = await headerImg.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.width / box!.height).toBeGreaterThan(2.7);
+  expect(box!.width / box!.height).toBeLessThan(3.3);
+
   // 2) The left-anchored (topAndBottom, wp:align=left) body image renders on
   //    its own flex line, left-aligned (justify-content: flex-start), NOT
   //    centered.
