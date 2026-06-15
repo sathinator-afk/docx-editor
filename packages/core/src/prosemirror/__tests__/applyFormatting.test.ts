@@ -16,7 +16,7 @@ import type { Transaction } from 'prosemirror-state';
 import { singletonManager } from '../schema';
 import { createStyleResolver } from '../styles';
 import type { StyleDefinitions } from '../../types/document';
-import { applyFormatting, setParagraphStyle } from '../applyFormatting';
+import { applyFormatting, setParagraphStyle, insertBreak } from '../applyFormatting';
 
 const schema = singletonManager.getSchema();
 
@@ -148,5 +148,40 @@ describe('setParagraphStyle', () => {
     );
 
     expect(viewReact.state.doc.toJSON()).toEqual(viewVue.state.doc.toJSON());
+  });
+});
+
+describe('insertBreak', () => {
+  test('page break inserts a pageBreak node after the target paragraph', () => {
+    const view = makeView(para('AAA', 'first'), para('BBB', 'second'));
+    const ok = insertBreak(view, { paraId: 'AAA', type: 'page' });
+    expect(ok).toBe(true);
+    const kinds = view.state.doc.content.content.map((n) => n.type.name);
+    // pageBreak follows the first paragraph (plus the command's trailing empty para).
+    expect(kinds[0]).toBe('paragraph');
+    expect(kinds[1]).toBe('pageBreak');
+    expect(view.state.doc.firstChild?.textContent).toBe('first');
+  });
+
+  test('sectionNextPage marks the target paragraph as a nextPage section end', () => {
+    const view = makeView(para('AAA', 'first'), para('BBB', 'second'));
+    const ok = insertBreak(view, { paraId: 'AAA', type: 'sectionNextPage' });
+    expect(ok).toBe(true);
+    expect(view.state.doc.firstChild?.attrs.sectionBreakType).toBe('nextPage');
+    expect(view.state.doc.firstChild?.textContent).toBe('first');
+  });
+
+  test('sectionContinuous marks the target paragraph as a continuous section end', () => {
+    const view = makeView(para('AAA', 'first'));
+    const ok = insertBreak(view, { paraId: 'AAA', type: 'sectionContinuous' });
+    expect(ok).toBe(true);
+    expect(view.state.doc.firstChild?.attrs.sectionBreakType).toBe('continuous');
+  });
+
+  test('returns false for an unresolvable paraId, without dispatching', () => {
+    const view = makeView(para('AAA', 'hello'));
+    const before = view.state;
+    expect(insertBreak(view, { paraId: 'ZZZ', type: 'page' })).toBe(false);
+    expect(view.state).toBe(before);
   });
 });

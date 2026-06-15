@@ -871,6 +871,7 @@ const {
   handleInsertSymbol,
   applyFormatting,
   setParagraphStyle,
+  insertBreak,
 } = useFormattingActions({ editorView, activeView: activeFormattingView, getDocument });
 
 const {
@@ -1138,6 +1139,7 @@ const { exposed } = useDocxEditorRefApi({
   proposeChange,
   applyFormatting,
   setParagraphStyle,
+  insertBreak,
   scrollVisiblePositionIntoView,
   contentChangeSubscribers,
   selectionChangeSubscribers,

@@ -1,12 +1,13 @@
 /**
- * Agent-facing formatting operations shared by the React and Vue adapters.
+ * Agent-facing edit operations shared by the React and Vue adapters.
  *
  * `applyFormatting` maps a mark-toggle request (bold/italic/underline/strike/
  * color/highlight/fontSize/fontFamily) onto a PM transaction over a paragraph
  * range located by `paraId` (+ optional `search`). `setParagraphStyle` applies
- * a named paragraph style to that range.
+ * a named paragraph style to that range. `insertBreak` inserts a page or
+ * section break after the paragraph located by `paraId`.
  *
- * Both take the `EditorView` as a parameter. `setParagraphStyle` takes the
+ * All take the `EditorView` as a parameter. `setParagraphStyle` takes the
  * style resolver as an injected dependency so each adapter keeps its own
  * resolver-sourcing strategy (React caches per styles object; Vue rebuilds).
  *
@@ -18,6 +19,8 @@
 import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { applyStyle } from './commands/paragraph';
+import { insertPageBreak } from './commands/pageBreak';
+import { insertSectionBreakNextPage, insertSectionBreakContinuous } from './commands/sectionBreak';
 import type { StyleResolver } from './styles';
 import type { NumberingMap } from '../docx/numberingParser';
 import { mapHexToHighlightName } from '../utils/highlightColors';
@@ -182,6 +185,54 @@ export function setParagraphStyle(
 
   let didApply = false;
   cmd(stateWithSel, (newTr) => {
+    didApply = true;
+    newTr.setSelection(view.state.selection.map(newTr.doc, newTr.mapping));
+    view.dispatch(newTr);
+  });
+
+  return didApply;
+}
+
+/** Kind of break `insertBreak` can insert after a paragraph. */
+export type BreakKind = 'page' | 'sectionNextPage' | 'sectionContinuous';
+
+export interface InsertBreakOptions {
+  paraId: string;
+  type: BreakKind;
+}
+
+const BREAK_COMMANDS = {
+  page: insertPageBreak,
+  sectionNextPage: insertSectionBreakNextPage,
+  sectionContinuous: insertSectionBreakContinuous,
+} as const;
+
+/**
+ * Insert a page or section break after the paragraph identified by `paraId`.
+ *
+ * The break is anchored to the end of the target paragraph (so that paragraph
+ * becomes the page/section end), reusing the same commands the Insert > Break
+ * menu uses. The user's selection is preserved (mapped through the edit) rather
+ * than following the inserted break. Returns false when the paraId can't be
+ * resolved or `type` is unknown.
+ */
+export function insertBreak(view: EditorView, options: InsertBreakOptions): boolean {
+  const command = BREAK_COMMANDS[options.type];
+  if (!command) return false;
+
+  const range = findParaIdRange(view.state.doc, options.paraId);
+  if (!range) return false;
+
+  // `range.to - 1` is the end of the paragraph's content (before its close
+  // token) — anchoring the cursor there triggers the commands' end-of-block
+  // path, which appends the break after this paragraph.
+  const endPos = range.to - 1;
+  const stateWithSel = view.state.apply(
+    view.state.tr.setSelection(TextSelection.create(view.state.doc, endPos))
+  );
+
+  let didApply = false;
+  command(stateWithSel, (newTr) => {
     didApply = true;
     newTr.setSelection(view.state.selection.map(newTr.doc, newTr.mapping));
     view.dispatch(newTr);

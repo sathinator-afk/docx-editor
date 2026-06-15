@@ -20,7 +20,9 @@ import {
 import {
   applyFormatting as applyFormattingCore,
   setParagraphStyle as setParagraphStyleCore,
+  insertBreak as insertBreakCore,
   type ApplyFormattingOptions,
+  type InsertBreakOptions,
 } from '@eigenpal/docx-editor-core/prosemirror/applyFormatting';
 
 export interface UseFormattingActionsOptions {
@@ -36,7 +38,7 @@ export interface UseFormattingActionsOptions {
   getDocument: () => Document | null;
 }
 
-export type { ApplyFormattingOptions };
+export type { ApplyFormattingOptions, InsertBreakOptions };
 
 export function useFormattingActions(opts: UseFormattingActionsOptions) {
   const targetView = () => opts.activeView?.value ?? opts.editorView.value;
@@ -112,6 +114,12 @@ export function useFormattingActions(opts: UseFormattingActionsOptions) {
     return setParagraphStyleCore(view, options, { styleResolver, numbering });
   }
 
+  function insertBreak(options: InsertBreakOptions): boolean {
+    const view = opts.editorView.value;
+    if (!view) return false;
+    return insertBreakCore(view, options);
+  }
+
   return {
     handleClearFormatting,
     handleApplyStyle,
@@ -121,5 +129,6 @@ export function useFormattingActions(opts: UseFormattingActionsOptions) {
     handleInsertSymbol,
     applyFormatting,
     setParagraphStyle,
+    insertBreak,
   };
 }
