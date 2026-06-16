@@ -78,6 +78,78 @@ function readImageDataRId(imagedata: XmlElement): string {
   );
 }
 
+/** Decode the bytes of a `data:*;base64,...` URL. Returns null on any failure. */
+function bytesFromDataUrl(src: string | undefined): Uint8Array | null {
+  if (!src || !src.startsWith('data:')) return null;
+  const comma = src.indexOf(',');
+  if (comma < 0) return null;
+  const b64 = src.slice(comma + 1);
+  try {
+    const bin =
+      typeof atob === 'function'
+        ? atob(b64)
+        : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (globalThis as any).Buffer?.from(b64, 'base64').toString('binary');
+    if (typeof bin !== 'string') return null;
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read an image's intrinsic pixel dimensions straight from its header bytes
+ * (PNG / JPEG / GIF / BMP). Used only as a fallback when a VML shape omits its
+ * `style` width/height — Word normally writes both, but some generators don't,
+ * and a zero-sized image renders invisibly. Returns null for unknown formats.
+ */
+function intrinsicSizePx(bytes: Uint8Array | null): { width: number; height: number } | null {
+  if (!bytes || bytes.length < 24) return null;
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+  // PNG — IHDR width/height are big-endian uint32 at offsets 16/20.
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    return { width: dv.getUint32(16), height: dv.getUint32(20) };
+  }
+  // GIF — width/height are little-endian uint16 at offsets 6/8.
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
+    return { width: bytes[6] | (bytes[7] << 8), height: bytes[8] | (bytes[9] << 8) };
+  }
+  // BMP — width/height are int32 LE at offsets 18/22 (height may be negative).
+  if (bytes[0] === 0x42 && bytes[1] === 0x4d) {
+    return { width: dv.getInt32(18, true), height: Math.abs(dv.getInt32(22, true)) };
+  }
+  // JPEG — scan segment markers for a Start-Of-Frame (SOFn) and read its size.
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+    let off = 2;
+    while (off + 9 < bytes.length) {
+      if (bytes[off] !== 0xff) {
+        off++;
+        continue;
+      }
+      const marker = bytes[off + 1];
+      if (
+        marker >= 0xc0 &&
+        marker <= 0xcf &&
+        marker !== 0xc4 && // DHT
+        marker !== 0xc8 && // JPG extension
+        marker !== 0xcc // DAC
+      ) {
+        return {
+          height: (bytes[off + 5] << 8) | bytes[off + 6],
+          width: (bytes[off + 7] << 8) | bytes[off + 8],
+        };
+      }
+      const len = (bytes[off + 2] << 8) | bytes[off + 3];
+      if (len < 2) break;
+      off += 2 + len;
+    }
+  }
+  return null;
+}
+
 /**
  * Parse a `w:pict` (or `w:object`) element into an inline image, or null when
  * it carries no ordinary VML picture (e.g. it's a watermark or has no image).
@@ -116,8 +188,25 @@ export function parseVmlImageContent(
     );
 
     const shapeStyle = parseStyleAttr(getAttribute(shape, null, 'style'));
-    const widthPx = cssLengthToPx(shapeStyle['width']);
-    const heightPx = cssLengthToPx(shapeStyle['height']);
+    let widthPx = cssLengthToPx(shapeStyle['width']);
+    let heightPx = cssLengthToPx(shapeStyle['height']);
+
+    // Fall back to the image's intrinsic dimensions when the shape `style`
+    // omits a size — otherwise a 0×0 image renders invisibly. Keep any explicit
+    // dimension and derive the missing one from the intrinsic aspect ratio.
+    if (widthPx == null || heightPx == null) {
+      const intrinsic = intrinsicSizePx(bytesFromDataUrl(src));
+      if (intrinsic && intrinsic.width > 0 && intrinsic.height > 0) {
+        if (widthPx == null && heightPx == null) {
+          widthPx = intrinsic.width;
+          heightPx = intrinsic.height;
+        } else if (widthPx == null) {
+          widthPx = (heightPx as number) * (intrinsic.width / intrinsic.height);
+        } else {
+          heightPx = widthPx * (intrinsic.height / intrinsic.width);
+        }
+      }
+    }
 
     const image: Image = {
       type: 'image',

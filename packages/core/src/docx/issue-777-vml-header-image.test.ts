@@ -42,6 +42,27 @@ const HDR_WITH_LOGO = `<w:hdr ${NS}>
   <w:p><w:r><w:t>Header text</w:t></w:r></w:p>
 </w:hdr>`;
 
+// A VML logo whose shape omits style width/height — size must fall back to the
+// image's intrinsic dimensions instead of rendering 0×0.
+const LOGO_PICT_NODIMS = `<w:r ${NS}><w:pict>
+  <v:shape id="Picture 2" type="#_x0000_t75" style="">
+    <v:imagedata r:id="rId8" o:title="logo"/>
+  </v:shape>
+</w:pict></w:r>`;
+
+/** Build a data URL with just enough PNG header to carry intrinsic w×h. */
+function pngDataUrl(w: number, h: number): string {
+  const bytes = new Uint8Array(24);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0); // signature
+  bytes.set([0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52], 8); // IHDR length + type
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(16, w);
+  dv.setUint32(20, h);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return `data:image/png;base64,${btoa(bin)}`;
+}
+
 function pictEl(xml: string): XmlElement {
   const root = parseXml(xml)!;
   return findAllDeep(root, 'w', 'pict')[0];
@@ -54,12 +75,17 @@ function hdrRoot(xml: string): XmlElement {
 
 const rels: RelationshipMap = new Map([
   ['rId7', { id: 'rId7', type: 'image', target: 'media/logo.png', targetMode: 'Internal' }],
+  ['rId8', { id: 'rId8', type: 'image', target: 'media/logo2.png', targetMode: 'Internal' }],
   ['rId9', { id: 'rId9', type: 'image', target: 'media/wm.png', targetMode: 'Internal' }],
 ] as unknown as [string, never][]);
 const media: Map<string, MediaFile> = new Map([
   [
     'media/logo.png',
     { path: 'word/media/logo.png', dataUrl: 'data:image/png;base64,AAA', mimeType: 'image/png' },
+  ],
+  [
+    'media/logo2.png',
+    { path: 'word/media/logo2.png', dataUrl: pngDataUrl(80, 20), mimeType: 'image/png' },
   ],
 ] as unknown as [string, never][]);
 
@@ -76,6 +102,15 @@ describe('issue #777 — VML header images', () => {
     expect(result!.image.size.height).toBeGreaterThan(0);
     // width should be 3× height (120pt vs 40pt).
     expect(Math.round(result!.image.size.width / result!.image.size.height)).toBe(3);
+  });
+
+  test('falls back to intrinsic image size when the shape omits style dims', () => {
+    const result = parseVmlImageContent(pictEl(LOGO_PICT_NODIMS), rels, media);
+    expect(result).not.toBeNull();
+    // The PNG header declares 80×20; size must reflect that, not 0×0.
+    const EMU_PER_PX = 914400 / 96;
+    expect(Math.round(result!.image.size.width / EMU_PER_PX)).toBe(80);
+    expect(Math.round(result!.image.size.height / EMU_PER_PX)).toBe(20);
   });
 
   test('does NOT parse a watermark shape as an inline image', () => {
