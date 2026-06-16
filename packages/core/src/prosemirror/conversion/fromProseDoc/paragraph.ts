@@ -143,6 +143,11 @@ function insertCommentRanges(content: ParagraphContent[], paragraph: PMNode): Pa
     for (const cid of [...openedComments]) {
       if (!nodeCommentIds.has(cid)) {
         result.push({ type: 'commentRangeEnd', id: cid });
+        // The reference run is the comment's anchor (ECMA-376) and the
+        // serializer emits it only from this 'commentReference' node. Editor
+        // comments are marks, so without this every editor-saved comment loses
+        // its <w:commentReference>. See eigenpal/docx-editor#837.
+        result.push({ type: 'commentReference', id: cid });
         openedComments.delete(cid);
       }
     }
@@ -166,6 +171,7 @@ function insertCommentRanges(content: ParagraphContent[], paragraph: PMNode): Pa
   // Close any remaining open comments
   for (const cid of openedComments) {
     result.push({ type: 'commentRangeEnd', id: cid });
+    result.push({ type: 'commentReference', id: cid });
   }
 
   return result;

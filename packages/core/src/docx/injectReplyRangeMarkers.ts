@@ -64,6 +64,9 @@ export function injectReplyRangeMarkers(content: BlockContent[], comments: Comme
             if (replyIds) {
               for (const rid of replyIds) {
                 newItems.push({ type: 'commentRangeEnd', id: rid });
+                // Each reply needs its own reference run — the serializer emits
+                // it only from this node (see eigenpal/docx-editor#837).
+                newItems.push({ type: 'commentReference', id: rid });
               }
             }
           } else {
@@ -140,6 +143,7 @@ export function injectTCReplyRangeMarkers(content: BlockContent[], comments: Com
             }
             for (const rid of replyIds) {
               newItems.push({ type: 'commentRangeEnd', id: rid });
+              newItems.push({ type: 'commentReference', id: rid });
             }
           } else {
             newItems.push(item);

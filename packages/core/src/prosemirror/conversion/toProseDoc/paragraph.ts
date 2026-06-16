@@ -68,6 +68,14 @@ export function convertParagraph(
       commentIds.add(content.id);
     } else if (content.type === 'commentRangeEnd') {
       commentIds.delete(content.id);
+    } else if (content.type === 'commentReference') {
+      // Intentionally not converted to a PM node. Editor comments are `comment`
+      // marks over a range; the reference run is regenerated from those marks on
+      // save (see insertCommentRanges in fromProseDoc/paragraph.ts), so keeping
+      // it here would double-emit on the next save. A range-less "point" comment
+      // can't be expressed as a zero-width mark and so is dropped on the editor
+      // path — it still round-trips losslessly via parseDocx→repackDocx.
+      // See eigenpal/docx-editor#837.
     } else if (content.type === 'run') {
       let runNodes = convertRun(content, mergedStyleRunFormatting, styleResolver);
       if (commentIds.size > 0) {
