@@ -44,3 +44,15 @@ export interface CommentRangeEnd {
   type: 'commentRangeEnd';
   id: number;
 }
+
+/**
+ * Standalone comment reference marker (`w:commentReference`). Anchors a
+ * "point" comment that has no `commentRangeStart`/`End` range — Word places it
+ * at a single position. Modeled as its own node so it survives a round-trip;
+ * it is the single source of truth for every `w:commentReference` (ranged
+ * comments carry one too, right after their `commentRangeEnd`).
+ */
+export interface CommentReference {
+  type: 'commentReference';
+  id: number;
+}

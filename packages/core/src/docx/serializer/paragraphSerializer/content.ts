@@ -349,10 +349,12 @@ export function serializeParagraphContent(content: ParagraphContent): string {
     case 'commentRangeStart':
       return `<w:commentRangeStart w:id="${content.id}"/>`;
     case 'commentRangeEnd':
-      return (
-        `<w:commentRangeEnd w:id="${content.id}"/>` +
-        `<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="${content.id}"/></w:r>`
-      );
+      // Emit only the end marker. The reference run is emitted from its own
+      // 'commentReference' node (preserved at parse time), so every comment —
+      // ranged or point — round-trips its reference exactly once.
+      return `<w:commentRangeEnd w:id="${content.id}"/>`;
+    case 'commentReference':
+      return `<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="${content.id}"/></w:r>`;
     case 'insertion':
       return serializeTrackedChange('ins', content);
     case 'deletion':

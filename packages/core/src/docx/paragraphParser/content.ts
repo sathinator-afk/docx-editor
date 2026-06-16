@@ -465,12 +465,31 @@ export function parseParagraphContents(
   let afterSeparator = false;
   let complexFieldLock = false;
   let complexFieldDirty = false;
+  // Every run consumed while a complex field is open, so an UNTERMINATED field
+  // (one whose w:fldChar end lives in a later paragraph — TOC, INDEX, a multi-
+  // paragraph TA) can be flushed as plain runs instead of silently swallowed.
+  let complexFieldRuns: Run[] = [];
+  // Where the open field began in `contents`, so a flush splices its runs back
+  // into position — preserving order vs. any in-paragraph non-run content (e.g.
+  // a real TOC's first entry hyperlink shares the begin paragraph).
+  let complexFieldStartIndex = 0;
 
   for (const child of children) {
     const localName = getLocalName(child.name);
 
     switch (localName) {
       case 'r': {
+        // A run that carries a w:commentReference anchors a comment (Word wraps
+        // the reference in a styled run). Model it explicitly so a range-less
+        // "point" comment survives — otherwise this run parses to empty content
+        // and is dropped by the run consolidator.
+        const commentRefEl = findChild(child, 'w', 'commentReference');
+        if (commentRefEl) {
+          const commentRefId = parseInt(getAttribute(commentRefEl, 'w', 'id') ?? '0', 10);
+          contents.push({ type: 'commentReference', id: commentRefId });
+          break;
+        }
+
         // Check for field characters in this run
         const runElement =
           trackedContext === 'deletion' ? normalizeDeletionContentElement(child) : child;
@@ -507,9 +526,12 @@ export function parseParagraphContents(
           complexFieldResultRuns = [];
           complexFieldLock = false;
           complexFieldDirty = false;
+          complexFieldRuns = [];
+          complexFieldStartIndex = contents.length;
         }
 
         if (inComplexField) {
+          complexFieldRuns.push(run);
           if (instrText) {
             complexFieldInstr += instrText;
           }
@@ -726,6 +748,13 @@ export function parseParagraphContents(
         contents.push({ type: 'commentRangeEnd', id: commentId });
         break;
       }
+      case 'commentReference': {
+        // Bare (unwrapped) reference — some producers emit it as a direct child
+        // of w:p rather than inside a w:r.
+        const commentId = parseInt(getAttribute(child, 'w', 'id') ?? '0', 10);
+        contents.push({ type: 'commentReference', id: commentId });
+        break;
+      }
 
       case 'oMath':
       case 'oMathPara': {
@@ -747,6 +776,17 @@ export function parseParagraphContents(
         // Unknown element - skip
         break;
     }
+  }
+
+  // An unterminated complex field (its w:fldChar end sits in a LATER paragraph,
+  // e.g. a Table of Contents) never closes here. Don't swallow its runs into a
+  // ComplexField that is never emitted — flush them as plain runs. Each run
+  // still carries its fieldChar/instrText content, so the begin + instruction
+  // round-trip verbatim and Word re-stitches the field across paragraphs. Splice
+  // at the field's start index so the begin/instr/separate runs keep their order
+  // relative to any non-run content (e.g. the first TOC entry's hyperlink).
+  if (inComplexField && complexFieldRuns.length > 0) {
+    contents.splice(complexFieldStartIndex, 0, ...complexFieldRuns);
   }
 
   return contents;

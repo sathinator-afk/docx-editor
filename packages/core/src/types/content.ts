@@ -62,7 +62,7 @@ export type {
 
 export type { TableCell, TableRow, Table } from './content/table';
 
-export type { Comment, CommentRangeStart, CommentRangeEnd } from './content/comment';
+export type { Comment, CommentRangeStart, CommentRangeEnd, CommentReference } from './content/comment';
 
 export type { MathEquation } from './content/math';
 

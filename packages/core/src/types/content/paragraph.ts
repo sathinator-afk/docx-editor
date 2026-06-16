@@ -10,7 +10,7 @@ import type { ListRendering } from '../lists';
 import type { Run } from './run';
 import type { Hyperlink, BookmarkStart, BookmarkEnd, SimpleField, ComplexField } from './link';
 import type { InlineSdt } from './sdt';
-import type { CommentRangeStart, CommentRangeEnd } from './comment';
+import type { CommentRangeStart, CommentRangeEnd, CommentReference } from './comment';
 import type {
   Insertion,
   Deletion,
@@ -43,6 +43,7 @@ export type ParagraphContent =
   | InlineSdt
   | CommentRangeStart
   | CommentRangeEnd
+  | CommentReference
   | Insertion
   | Deletion
   | MoveFrom
