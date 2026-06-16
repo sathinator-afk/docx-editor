@@ -1,5 +1,7 @@
 # @eigenpal/docx-editor-agents
 
+## 1.6.0
+
 ## 1.5.0
 
 ### Minor Changes
