@@ -189,6 +189,27 @@ describe('insertBreak', () => {
     expect(insertBreak(view, { paraId: 'ZZZ', type: 'page' })).toBe(false);
     expect(view.state).toBe(before);
   });
+
+  test('refuses to break a paragraph nested in a table cell, without dispatching', () => {
+    // A page-break node is invalid in a cell's schema and a sectPr nested in a
+    // w:tc is invalid OOXML — so a cell-targeted break must be a no-op (matching
+    // the headless reviewer bridge, which only addresses top-level paragraphs).
+    const cellPara = schema.nodes.paragraph.create({ paraId: 'CELL' }, schema.text('in cell'));
+    const cell = schema.nodes.tableCell.create(null, cellPara);
+    const table = schema.nodes.table.create(null, schema.nodes.tableRow.create(null, cell));
+    const doc = schema.nodes.doc.create(null, [para('AAA', 'body'), table]);
+    const view = {
+      state: EditorState.create({ schema, doc }),
+      dispatch(tr: Transaction) {
+        (view as { state: EditorState }).state = view.state.apply(tr);
+      },
+    } as unknown as EditorView & { state: EditorState };
+    const before = view.state;
+
+    expect(insertBreak(view, { paraId: 'CELL', type: 'page' })).toBe(false);
+    expect(insertBreak(view, { paraId: 'CELL', type: 'sectionNextPage' })).toBe(false);
+    expect(view.state).toBe(before);
+  });
 });
 
 // End-to-end: an agent-inserted break must survive PM -> fromProseDoc ->

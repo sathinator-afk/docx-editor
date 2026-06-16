@@ -72,4 +72,30 @@ describe('insertSectionBreak commands', () => {
     expect(doc.child(1).textContent).toBe('Hello');
     expect(selection.$from.parent.textContent).toBe('Hello');
   });
+
+  test('refuses to act when the cursor is inside a table cell', () => {
+    // A w:sectPr nested in a w:tc is invalid OOXML, so the command must no-op
+    // (return false) rather than mark a cell paragraph as a section end.
+    const cellPara = schema.node('paragraph', {}, [schema.text('in cell')]);
+    const cell = schema.node('tableCell', {}, [cellPara]);
+    const table = schema.node('table', {}, [schema.node('tableRow', {}, [cell])]);
+    const doc = schema.node('doc', { defaultTabStopTwips: null, watermark: null }, [
+      schema.node('paragraph', {}, [schema.text('body')]),
+      table,
+    ]);
+    let state = EditorState.create({ doc });
+    // Place the cursor inside the cell paragraph.
+    let cursor = 0;
+    doc.descendants((node, pos) => {
+      if (node.isTextblock && node.textContent === 'in cell') cursor = pos + 1;
+      return true;
+    });
+    state = state.apply(state.tr.setSelection(TextSelection.create(state.doc, cursor)));
+    const before = state;
+    const ran = insertSectionBreakNextPage(state, (tr) => {
+      state = state.apply(tr);
+    });
+    expect(ran).toBe(false);
+    expect(state).toBe(before);
+  });
 });

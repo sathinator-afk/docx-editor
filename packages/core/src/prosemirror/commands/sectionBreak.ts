@@ -25,8 +25,16 @@ function insertSectionBreakAtCursor(breakType: InsertableSectionBreak): Command 
     const paragraphType = schema.nodes.paragraph;
     if (!paragraphType) return false;
 
+    const { $from } = state.selection;
+    // Section breaks only belong on top-level body paragraphs. Inside a table
+    // cell or block SDT a `w:sectPr` is invalid OOXML, so refuse to act there
+    // (the menu item becomes a no-op rather than corrupting the document).
+    const isTopLevel = $from.parent.isTextblock
+      ? state.doc.resolve($from.before()).depth === 0
+      : $from.depth === 0;
+    if (!isTopLevel) return false;
+
     if (dispatch) {
-      const { $from } = state.selection;
       const tr = state.tr;
       let cursorPos: number;
 

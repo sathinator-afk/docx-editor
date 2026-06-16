@@ -49,7 +49,7 @@ function BreakSubmenu({ items, closeMenu }: { items: BreakSubmenuItem[]; closeMe
               background: 'transparent',
               cursor: disabled ? 'default' : 'pointer',
               fontSize: 13,
-              color: 'var(--doc-text, #374151)',
+              color: 'var(--doc-text)',
               width: '100%',
               textAlign: 'left',
               whiteSpace: 'nowrap',
@@ -64,7 +64,7 @@ function BreakSubmenu({ items, closeMenu }: { items: BreakSubmenuItem[]; closeMe
             onMouseOver={(e) => {
               if (!disabled) {
                 (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                  'var(--doc-bg-hover, #f3f4f6)';
+                  'var(--doc-bg-hover)';
               }
             }}
             onMouseOut={(e) => {

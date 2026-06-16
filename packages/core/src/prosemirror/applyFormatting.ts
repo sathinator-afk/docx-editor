@@ -218,8 +218,8 @@ export interface InsertBreakOptions {
  *   section.
  *
  * The user's selection is preserved (mapped through the edit) rather than
- * following the inserted break. Returns false when the paraId can't be resolved
- * or `type` is unknown.
+ * following the inserted break. Returns false when the paraId can't be resolved,
+ * the target isn't a top-level paragraph, or `type` is unknown.
  */
 export function insertBreak(view: EditorView, options: InsertBreakOptions): boolean {
   const range = findParaIdRange(view.state.doc, options.paraId);
@@ -230,6 +230,13 @@ export function insertBreak(view: EditorView, options: InsertBreakOptions): bool
   // `range.to` is just after its closing token.
   const targetPara = state.doc.nodeAt(range.from);
   if (!targetPara) return false;
+
+  // Breaks belong on top-level body paragraphs. `findParaIdRange` matches
+  // paragraphs anywhere (incl. table cells / block SDTs), but a `w:sectPr` or
+  // page-break node nested in a cell is invalid OOXML — and a page-break node
+  // isn't even allowed by the cell schema (the insert would throw). Mirror the
+  // headless reviewer bridge, which only resolves top-level paragraphs.
+  if (state.doc.resolve(range.from).depth !== 0) return false;
 
   const tr = state.tr;
 
