@@ -5,7 +5,13 @@
 
 import { describe, test, expect } from 'bun:test';
 import { layoutDocument } from '../index';
-import type { FlowBlock, ParagraphBlock, ParagraphMeasure, SectionBreakBlock } from '../types';
+import type {
+  FlowBlock,
+  ParagraphBlock,
+  ParagraphFragment,
+  ParagraphMeasure,
+  SectionBreakBlock,
+} from '../types';
 
 function para(id: string, height: number): { block: ParagraphBlock; measure: ParagraphMeasure } {
   return {
@@ -32,6 +38,37 @@ function para(id: string, height: number): { block: ParagraphBlock; measure: Par
         },
       ],
       totalHeight: height,
+    },
+  };
+}
+
+function paraLines(
+  id: string,
+  count: number,
+  lineHeight: number
+): { block: ParagraphBlock; measure: ParagraphMeasure } {
+  return {
+    block: {
+      kind: 'paragraph',
+      id,
+      pmStart: 0,
+      pmEnd: count,
+      runs: [{ kind: 'text', text: id.repeat(count) }],
+      attrs: {},
+    },
+    measure: {
+      kind: 'paragraph',
+      lines: Array.from({ length: count }, (_, i) => ({
+        fromRun: 0,
+        fromChar: i,
+        toRun: 0,
+        toChar: i + 1,
+        width: 100,
+        ascent: 10,
+        descent: 3,
+        lineHeight,
+      })),
+      totalHeight: count * lineHeight,
     },
   };
 }
@@ -99,5 +136,38 @@ describe('continuous section break geometry', () => {
     const lastPage = result.pages[result.pages.length - 1];
     expect(lastPage.size.w).toBe(1200);
     expect(lastPage.size.h).toBe(700);
+  });
+
+  test('balances a terminal continuous multi-column text section that fits on the current page', () => {
+    const A = para('intro', 80);
+    const sb: SectionBreakBlock = {
+      kind: 'sectionBreak',
+      id: 'sb',
+      type: 'continuous',
+    };
+    const B = paraLines('two-column', 6, 20);
+
+    const blocks: FlowBlock[] = [A.block, sb, B.block];
+    const measures = [A.measure, { kind: 'sectionBreak' }, B.measure] as never;
+
+    const result = layoutDocument(blocks, measures, {
+      pageSize: { w: 500, h: 500 },
+      margins: { top: 50, right: 50, bottom: 50, left: 50 },
+      columns: { count: 2, gap: 20 },
+      bodyBreakType: 'continuous',
+    });
+
+    const balancedFragments = result.pages[0].fragments.filter(
+      (f): f is ParagraphFragment => f.kind === 'paragraph' && f.blockId === 'two-column'
+    );
+
+    expect(result.pages).toHaveLength(1);
+    expect(result.pages[0].columns?.count).toBe(2);
+    expect(balancedFragments).toHaveLength(2);
+    expect(balancedFragments.map((f) => [f.fromLine, f.toLine])).toEqual([
+      [0, 3],
+      [3, 6],
+    ]);
+    expect(balancedFragments.map((f) => f.x)).toEqual([50, 260]);
   });
 });
