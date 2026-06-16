@@ -20,12 +20,7 @@ import type {
   TableCell,
   TableMeasure,
 } from '../layout-engine/types';
-import {
-  countTableColumns,
-  normalizeTableColumnWidths,
-  resolveCellGrid,
-  resolveTableWidthPx,
-} from './tableWidthUtils';
+import { resolveCellGrid, resolveTableColumnWidths, resolveTableWidthPx } from './tableWidthUtils';
 
 /** Word's TableNormal default — 108 twips ≈ 7px. */
 const DEFAULT_CELL_PADDING_X = 7;
@@ -85,22 +80,9 @@ export function measureTableBlock(
   contentWidth: number,
   measureBlock: (block: FlowBlock, contentWidth: number) => Measure
 ): TableMeasure {
-  let columnWidths = tableBlock.columnWidths ?? [];
   const explicitWidthPx = resolveTableWidthPx(tableBlock.width, tableBlock.widthType, contentWidth);
-  const colCount = countTableColumns(tableBlock);
   const targetWidth = explicitWidthPx ?? contentWidth;
-
-  if (tableBlock.rows.length > 0) {
-    columnWidths = normalizeTableColumnWidths(columnWidths, colCount, targetWidth);
-  }
-
-  if (columnWidths.length > 0 && explicitWidthPx) {
-    const totalWidth = columnWidths.reduce((sum, w) => sum + w, 0);
-    if (totalWidth > 0 && Math.abs(totalWidth - explicitWidthPx) > 1) {
-      const scale = explicitWidthPx / totalWidth;
-      columnWidths = columnWidths.map((w) => w * scale);
-    }
-  }
+  const columnWidths = resolveTableColumnWidths(tableBlock, contentWidth);
 
   // Resolve each cell's grid column once (shared with the painter and the
   // row-break paginator) so column-width assignment honors vertically-merged

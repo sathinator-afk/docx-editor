@@ -24,8 +24,13 @@ export {
   countTableColumns,
   normalizeTableColumnWidths,
   resolveCellGrid,
+  resolveTableColumnWidths,
+  resolveTableTotalWidthPx,
 } from './tableWidthUtils';
 export type { ResolvedGridCell } from './tableWidthUtils';
+
+// Floating-table classification (demote full-width floats to inline).
+export { isBlockLikeFloatingTable, demoteBlockLikeFloatingTables } from './floatingTable';
 
 // Measurement (text + paragraph + caches)
 export * from './measuring';

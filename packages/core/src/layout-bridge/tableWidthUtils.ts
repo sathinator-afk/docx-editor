@@ -128,3 +128,47 @@ export function normalizeTableColumnWidths(
 
   return normalized.map((width) => (width > 0 ? width : fallbackWidth));
 }
+
+/**
+ * Resolve a table's per-column pixel widths from its grid metadata and width
+ * budget — the width half of `measureTableBlock`, with NO cell-content
+ * measurement. Factored out so a caller that only needs widths (e.g. deciding
+ * whether a floating table is effectively full-width, before the main measure
+ * pass) doesn't have to measure every cell.
+ *
+ * @internal
+ */
+export function resolveTableColumnWidths(tableBlock: TableBlock, contentWidth: number): number[] {
+  let columnWidths = tableBlock.columnWidths ?? [];
+  const explicitWidthPx = resolveTableWidthPx(tableBlock.width, tableBlock.widthType, contentWidth);
+  const colCount = countTableColumns(tableBlock);
+  const targetWidth = explicitWidthPx ?? contentWidth;
+
+  if (tableBlock.rows.length > 0) {
+    columnWidths = normalizeTableColumnWidths(columnWidths, colCount, targetWidth);
+  }
+
+  if (columnWidths.length > 0 && explicitWidthPx) {
+    const total = columnWidths.reduce((sum, w) => sum + w, 0);
+    if (total > 0 && Math.abs(total - explicitWidthPx) > 1) {
+      const scale = explicitWidthPx / total;
+      columnWidths = columnWidths.map((w) => w * scale);
+    }
+  }
+
+  return columnWidths;
+}
+
+/**
+ * Total pixel width of a table — sum of its resolved column widths, falling
+ * back to the explicit table width or the content-width budget. No cell-content
+ * measurement, so it is safe to call before the main measure pass. Mirrors the
+ * `totalWidth` that `measureTableBlock` produces.
+ *
+ * @internal
+ */
+export function resolveTableTotalWidthPx(tableBlock: TableBlock, contentWidth: number): number {
+  const columnWidths = resolveTableColumnWidths(tableBlock, contentWidth);
+  const explicitWidthPx = resolveTableWidthPx(tableBlock.width, tableBlock.widthType, contentWidth);
+  return columnWidths.reduce((w, cw) => w + cw, 0) || explicitWidthPx || contentWidth;
+}

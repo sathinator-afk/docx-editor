@@ -30,6 +30,7 @@ import {
 import {
   toFlowBlocks,
   computePerBlockWidths,
+  demoteBlockLikeFloatingTables,
   collectFootnoteRefs,
   convertHeaderFooterToContent,
   convertHeaderFooterPmDocToContent,
@@ -147,6 +148,18 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
     { pageSize, margins, columns },
     { pageSize: finalPageSize, margins: finalMargins, columns: finalColumns }
   );
+
+  // Step 1.5: Demote full-width "floating" tables to inline. A positioned table
+  // that leaves no room for text to wrap beside it (a common full-width contract
+  // form table) is block-like in Word/Google Docs — it paginates across pages.
+  // Our floating path instead paints it as one overflowing fragment AND makes
+  // the next paragraph skip past the whole table height (a wrap zone), stranding
+  // it off-page. Clearing `floating` here — before measure and layout — routes
+  // it through `layoutTable` (which breaks rows across pages) and suppresses the
+  // wrap zone. Purely a layout transform on the ephemeral FlowBlocks; the PM doc
+  // and the saved DOCX keep the original floating table.
+  demoteBlockLikeFloatingTables(blocks, blockWidths, contentWidth);
+
   const measures = measureBlocks(
     blocks,
     blockWidths,

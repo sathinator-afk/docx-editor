@@ -66,6 +66,20 @@ export interface PictureWatermark {
 export type Watermark = TextWatermark | PictureWatermark;
 
 /**
+ * Default text-watermark presets shown in the watermark dialog, mirroring the
+ * canned phrases MS Word offers. Adapters expose a `watermarkPresets` prop to
+ * override this list; both React and Vue fall back to these when unset.
+ */
+export const DEFAULT_WATERMARK_PRESETS: readonly string[] = [
+  'CONFIDENTIAL',
+  'DRAFT',
+  'DO NOT COPY',
+  'SAMPLE',
+  'URGENT',
+  'ASAP',
+];
+
+/**
  * Default on-page extent of a picture watermark, in EMUs (~4.32in / 311.4pt),
  * matching the size MS Word uses. The larger of the image's sides is fit to
  * this; the other side is derived from the aspect ratio.

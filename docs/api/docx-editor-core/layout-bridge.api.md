@@ -175,6 +175,9 @@ export const DEFAULT_PAGE_HEIGHT_PX = 1056;
 // @public
 export const DEFAULT_PAGE_WIDTH_PX = 816;
 
+// @internal
+export function demoteBlockLikeFloatingTables(blocks: FlowBlock[], blockWidths: number[], fallbackWidth: number): void;
+
 // @public
 export function detectTableInsertHover(input: TableInsertHoverInput): TableInsertHoverHit | null;
 
@@ -465,6 +468,9 @@ export function hitTestTableCell(pageHit: PageHit, blocks: FlowBlock[], measures
 // @public
 export function invalidateHfDomCache(): void;
 
+// @internal
+export function isBlockLikeFloatingTable(block: TableBlock, contentWidth: number): boolean;
+
 // @public
 export function isMultiPageSelection(rects: SelectionRect[]): boolean;
 
@@ -596,6 +602,12 @@ export function resolveHeaderFooterVisualTop(run: ImageRun, paragraphY: number, 
 
 // @public
 export function resolveListTemplate(template: string, counters: number[], levelNumFmts: NumberFormat[] | undefined): string;
+
+// @internal
+export function resolveTableColumnWidths(tableBlock: TableBlock, contentWidth: number): number[];
+
+// @internal
+export function resolveTableTotalWidthPx(tableBlock: TableBlock, contentWidth: number): number;
 
 // @internal
 export function resolveTableWidthPx(value: number | undefined, widthType: string | undefined, parentWidth: number): number | undefined;
