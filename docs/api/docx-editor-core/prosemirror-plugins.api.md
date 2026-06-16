@@ -5,9 +5,13 @@
 ```ts
 
 import { EditorState } from 'prosemirror-state';
+import { EditorView } from 'prosemirror-view';
 import { Plugin as Plugin_2 } from 'prosemirror-state';
 import { PluginKey } from 'prosemirror-state';
 import { Transaction } from 'prosemirror-state';
+
+// @public
+export function applyTrackedReplaceKeepingMarks(view: EditorView, from: number, to: number, text: string, pluginState: SuggestionModeState): MarkAttrs | null;
 
 // @public
 export function createDocumentStylesPlugin(styles: StyleDefinitions | StyleResolver | null | undefined): Plugin_2;

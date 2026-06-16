@@ -3,7 +3,7 @@
  * replace case (selection non-empty → mark selection deleted, then insert).
  */
 
-import type { Node as PMNode, MarkType } from 'prosemirror-model';
+import type { Node as PMNode, Mark, MarkType } from 'prosemirror-model';
 import type { Transaction } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
@@ -103,4 +103,79 @@ export function applySuggestionInsert(
 
   view.dispatch(tr.scrollIntoView());
   return true;
+}
+
+/**
+ * Like {@link applySuggestionInsert} but PRESERVES the replaced span's run
+ * formatting on the newly inserted text, and works without globally toggling
+ * suggestion mode (pass a `{ active: true, author }` state directly).
+ *
+ * `applySuggestionInsert` uses `tr.insertText`, which inherits only the boundary
+ * marks — so an accepted rewrite can lose the original bold/italic/colour. This
+ * variant copies the formatting marks from the start of the replaced range onto
+ * the inserted text via `schema.text(text, marks)`, dropping only the
+ * tracked-change / comment marks (those are stamped fresh, not inherited).
+ *
+ * The deletion side reuses {@link markRangeAsDeleted} verbatim (text stays in the
+ * doc, struck through, sharing the insertion's date so the sidebar folds the
+ * pair into one "replacement" card). Designed to be driven programmatically —
+ * e.g. an AI assist proposing an edit as a tracked change.
+ *
+ * @returns the minted insertion mark attrs (`{ revisionId, author, date }`) so
+ *   callers can target accept/reject, or `null` if the schema lacks the marks.
+ */
+export function applyTrackedReplaceKeepingMarks(
+  view: EditorView,
+  from: number,
+  to: number,
+  text: string,
+  pluginState: SuggestionModeState
+): MarkAttrs | null {
+  const { schema } = view.state;
+  const insertionType = schema.marks.insertion;
+  const deletionType = schema.marks.deletion;
+  if (!insertionType || !deletionType) return null;
+
+  // Run formatting on the first char of the replaced span. Real Mark objects
+  // carry full attrs (colour/theme tints, font slots) losslessly. Drop tracked-
+  // change / comment marks — the new text gets a fresh insertion mark and must
+  // not inherit a stale ins/del/comment.
+  const tracked = new Set(['insertion', 'deletion', 'comment']);
+  const keep: readonly Mark[] = view.state.doc
+    .resolve(from)
+    .marks()
+    .filter((m) => !tracked.has(m.type.name));
+
+  const tr = view.state.tr;
+  tr.setMeta(SUGGESTION_META, true); // we author the marks; skip the catch-all
+
+  const insertAttrs =
+    findAdjacentRevision(view.state.doc, from, 'insertion', pluginState.author) ||
+    makeMarkAttrs(pluginState);
+
+  // 1) Tracked-delete the old span (shares the insertion's date → one card).
+  if (from !== to) {
+    markRangeAsDeleted(
+      tr,
+      view.state.doc,
+      from,
+      to,
+      insertionType,
+      deletionType,
+      pluginState,
+      insertAttrs.date
+    );
+  }
+
+  // 2) Insert the new text AFTER the struck-through span, carrying formatting.
+  const insertAt = tr.mapping.map(to);
+  if (text.length > 0) {
+    tr.insert(insertAt, schema.text(text, keep));
+    const end = insertAt + text.length;
+    tr.removeMark(insertAt, end, deletionType); // new text is never a deletion
+    tr.addMark(insertAt, end, insertionType.create(insertAttrs));
+  }
+
+  view.dispatch(tr.scrollIntoView());
+  return insertAttrs;
 }

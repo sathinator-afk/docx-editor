@@ -22,6 +22,7 @@ export {
   toggleSuggestionMode,
   setSuggestionMode,
   isSuggestionModeActive,
+  applyTrackedReplaceKeepingMarks,
 } from './suggestionMode';
 export {
   documentStylesKey,
