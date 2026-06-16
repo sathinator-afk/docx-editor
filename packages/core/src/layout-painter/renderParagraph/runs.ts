@@ -170,6 +170,8 @@ function applyRunStyles(
     if (activeCommentId != null) {
       element.style.backgroundColor = 'rgba(255, 212, 0, 0.15)';
       element.style.borderBottom = '1px solid rgba(255, 212, 0, 0.4)';
+      element.style.cursor = 'pointer';
+      element.style.transition = 'background-color 0.15s ease';
       element.dataset.commentId = String(activeCommentId);
     }
   }
@@ -253,6 +255,24 @@ export function applyPmPositions(element: HTMLElement, pmStart?: number, pmEnd?:
   }
 }
 
+function applyInlineSdtWidgetAttrs(element: HTMLElement, run: TextRun): void {
+  const widget = run.inlineSdtWidget;
+  if (!widget) return;
+  element.classList.add('layout-inline-sdt-widget');
+  element.dataset.sdtWidget = widget.kind;
+  element.dataset.sdtGroupId = widget.groupId;
+  element.dataset.sdtPos = String(widget.pos);
+  if (widget.tag) element.dataset.sdtTag = widget.tag;
+  if (widget.alias) element.dataset.sdtAlias = widget.alias;
+  if (typeof widget.checked === 'boolean') {
+    element.dataset.sdtChecked = String(widget.checked);
+    element.setAttribute('aria-checked', String(widget.checked));
+  }
+  element.setAttribute('role', 'checkbox');
+  element.setAttribute('tabindex', '0');
+  element.setAttribute('aria-label', widget.alias || widget.tag || 'Checkbox content control');
+}
+
 /**
  * Render a text run
  */
@@ -266,6 +286,7 @@ export function renderTextRun(
 
   applyRunStyles(span, run, resolvedCommentIds);
   applyPmPositions(span, run.pmStart, run.pmEnd);
+  applyInlineSdtWidgetAttrs(span, run);
 
   // Handle hyperlinks
   if (run.hyperlink) {

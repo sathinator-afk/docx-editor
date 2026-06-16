@@ -18,6 +18,11 @@ import type { EditorView } from 'prosemirror-view';
 
 import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
 import type { Document, HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
+import {
+  findCommentRange,
+  findChangeRange,
+  clampRangeToDoc,
+} from '@eigenpal/docx-editor-core/prosemirror/queries';
 
 import type { HiddenProseMirrorRef } from '../HiddenProseMirror';
 import type { HiddenHeaderFooterPMsRef } from '../HiddenHeaderFooterPMs';
@@ -30,7 +35,7 @@ interface RefApiInputs {
   documentRef: React.MutableRefObject<Document | null>;
   layout: Layout | null;
   runLayoutPipeline: (state: EditorState) => void;
-  scrollToPositionImpl: (pmPos: number) => void;
+  scrollToPositionImpl: (pmPos: number, forParaIdScroll?: boolean) => void;
   scrollToParaIdImpl: (paraId: string) => boolean;
   scrollToPageImpl: (pageNumber: number) => void;
   setIsFocused: React.Dispatch<React.SetStateAction<boolean>>;
@@ -97,6 +102,36 @@ function buildRefApi(inputs: RefApiInputs): PagedEditorRef {
     scrollToPosition: scrollToPositionImpl,
     scrollToParaId: scrollToParaIdImpl,
     scrollToPage: scrollToPageImpl,
+    highlightRange: (from: number, to: number): void => {
+      const view = hiddenPMRef.current?.getView() ?? null;
+      if (!view) return;
+      // `highlightRange` takes raw caller positions; clampRangeToDoc returns
+      // null for a malformed/out-of-range request (no-op) and clamps `to` to
+      // the document size so setSelection -> doc.resolve() can't throw.
+      const range = clampRangeToDoc(view.state.doc, from, to);
+      if (!range) return;
+      // Selecting the range makes the selection overlay paint highlight rects
+      // over it. Scroll the start into view via the existing paraId-scroll
+      // path (instant, virtualization-safe).
+      hiddenPMRef.current?.setSelection(range.from, range.to);
+      scrollToPositionImpl(range.from, true);
+    },
+    scrollToCommentId: (commentId: number): boolean => {
+      const view = hiddenPMRef.current?.getView() ?? null;
+      const range = findCommentRange(view, commentId);
+      if (!range) return false;
+      hiddenPMRef.current?.setSelection(range.from, range.to);
+      scrollToPositionImpl(range.from, true);
+      return true;
+    },
+    scrollToChangeId: (revisionId: number): boolean => {
+      const view = hiddenPMRef.current?.getView() ?? null;
+      const range = findChangeRange(view, revisionId);
+      if (!range) return false;
+      hiddenPMRef.current?.setSelection(range.from, range.to);
+      scrollToPositionImpl(range.from, true);
+      return true;
+    },
     getHfPmView: (hf: HeaderFooter): EditorView | null => {
       const rId = findRidForHeaderFooter(documentRef.current, hf);
       if (!rId) return null;

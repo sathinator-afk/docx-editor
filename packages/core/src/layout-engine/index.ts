@@ -413,9 +413,21 @@ function layoutParagraph(
 
   while (currentLineIndex < lines.length) {
     const state = paginator.getCurrentState();
-    const availableHeight = paginator.getAvailableHeight();
 
-    // Calculate how many lines fit
+    // Reserve the space `addFragment` will consume before this fragment's first
+    // line: `max(spaceBefore, trailingSpacing)` for the first fragment (the
+    // margin collapsed with the previous block's `spacing.after`), nothing for a
+    // continuation fragment (a fresh page/column resets trailing spacing). The
+    // fit loop must budget against the space that actually remains for lines —
+    // otherwise it counts lines that fit WITHOUT the heading's trailing space but
+    // don't fit once `addFragment` adds it, so `ensureFits` punts the WHOLE first
+    // fragment to the next page (a long paragraph after a keepNext heading jumps
+    // wholesale, stranding the heading above a near-full-page gap).
+    const reservedBefore =
+      currentLineIndex === 0 ? Math.max(spaceBefore, state.trailingSpacing) : 0;
+    const availableForLines = paginator.getAvailableHeight() - reservedBefore;
+
+    // Calculate how many lines fit in the space remaining after the reserve.
     let linesHeight = 0;
     let fittingLines = 0;
 
@@ -426,13 +438,7 @@ function layoutParagraph(
       const lineHeight = lines[j].lineHeight + (lines[j].floatSkipBefore ?? 0);
       const totalWithLine = linesHeight + lineHeight;
 
-      // Add space before only for first fragment
-      const withSpacing =
-        currentLineIndex === 0 && j === currentLineIndex
-          ? totalWithLine + spaceBefore
-          : totalWithLine;
-
-      if (withSpacing <= availableHeight || fittingLines === 0) {
+      if (totalWithLine <= availableForLines || fittingLines === 0) {
         linesHeight = totalWithLine;
         fittingLines++;
       } else {

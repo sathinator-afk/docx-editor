@@ -35,14 +35,18 @@
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  background: #fff;
+  position: relative;
+  /* Above outline toggle/panel (z-index: 40) so title-bar menus stay clickable. */
+  z-index: 100;
+  /* Token so the chrome follows dark mode (mirrors React's bg-doc-surface). */
+  background: var(--doc-surface);
   /* Tailwind shadow-sm: `0 1px 2px 0 rgb(0 0 0 / 0.05)` */
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 .docx-editor-vue__title-bar {
   display: flex;
   align-items: stretch;
-  background: #fff;
+  background: var(--doc-surface);
   padding: 8px 0 4px;
   width: 100%;
   font-family:
@@ -85,7 +89,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--doc-bg, #f8f9fa);
+  background: var(--doc-bg);
   overflow: hidden;
 }
 /* Sticky ruler row that stays at the top while the page scrolls. */
@@ -97,7 +101,7 @@
   top: 0;
   z-index: 9;
   padding: 4px 20px;
-  background: var(--doc-bg, #f8f9fa);
+  background: var(--doc-bg);
 }
 .docx-editor-vue__editor-area {
   flex: 1;
@@ -114,7 +118,7 @@
   position: absolute;
   top: 24px;
   left: 48px;
-  z-index: 50;
+  z-index: 40;
   width: 32px;
   height: 32px;
   display: flex;
@@ -150,12 +154,16 @@
      whether the scrollbar is currently visible or not — without this,
      the page nudges horizontally when content grows past one screen
      and the centered horizontal ruler ends up offset relative to the
-     page on first paint. `both-edges` keeps the centering symmetric. */
+     page on first paint. `both-edges` keeps the centering symmetric.
+     NOTE: ImageSelectionOverlay's `computeImageOverlayRect` subtracts the
+     inline-start gutter as half of `offsetWidth - clientWidth`, which assumes
+     `both-edges`. If this ever changes to single-edge `stable`, update that
+     math too (issue #764). */
   scrollbar-gutter: stable both-edges;
   /* Breathing room under the last page so it isn't flush against the
      scroll bottom. */
   padding-bottom: 24px;
-  background: var(--doc-bg, #f8f9fa);
+  background: var(--doc-bg);
   cursor: text;
   position: relative;
 }
@@ -172,9 +180,9 @@
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  border: 1px solid rgba(26, 115, 232, 0.3);
-  background: #fff;
-  color: #1a73e8;
+  border: 1px solid var(--doc-primary);
+  background: var(--doc-surface);
+  color: var(--doc-primary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -195,9 +203,9 @@
   width: 20px;
   height: 20px;
   border-radius: 4px;
-  border: 1px solid #dadce0;
-  background: #f8f9fa;
-  color: #5f6368;
+  border: 1px solid var(--doc-border-light);
+  background: var(--doc-bg-input);
+  color: var(--doc-text-muted);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -9,7 +9,7 @@
  */
 
 import { type Command, type EditorState, type Transaction } from 'prosemirror-state';
-import { CellSelection } from 'prosemirror-tables';
+import { CellSelection, selectedRect } from 'prosemirror-tables';
 import { getTableContext } from '../context';
 import { makeRevisionInfo } from '../../../../plugins/revisionIds';
 
@@ -27,33 +27,64 @@ export const deleteRow: Command = (
   )
     return false;
 
+  // A CellSelection can span several rows; delete every row it covers, not
+  // just the anchor cell's row. `selectedRect` reports the selection's
+  // [top, bottom) row indices and accounts for rowspans. For a plain cursor
+  // it collapses to the single row, preserving the previous behavior.
+  const rowCount = context.rowCount ?? 0;
+  const rect = selectedRect(state);
+  const firstRow = Math.max(0, Math.min(rect.top, rowCount - 1));
+  const lastRow = Math.min(Math.max(rect.bottom - 1, firstRow), rowCount - 1);
+
   if (dispatch) {
     const tr = state.tr;
-    let rowStart = context.tablePos + 1;
-    for (let i = 0; i < context.rowIndex; i++) {
-      rowStart += context.table.child(i).nodeSize;
-    }
-    const rowNode = context.table.child(context.rowIndex);
-
+    const table = context.table;
     const info = makeRevisionInfo(state);
+
+    // Selecting every row and deleting would leave a schema-invalid empty
+    // table — drop the whole table instead, matching Word. Suggesting mode
+    // marks the rows (handled below), so it never hits this branch.
+    if (!info && firstRow === 0 && lastRow >= rowCount - 1) {
+      tr.delete(context.tablePos, context.tablePos + table.nodeSize);
+      dispatch(tr.scrollIntoView());
+      return true;
+    }
+
+    // Pre-compute each row's start offset against the original doc so we can
+    // delete bottom-up without re-measuring after each delete.
+    const rowStarts: number[] = [];
+    let acc = context.tablePos + 1;
+    table.forEach((row) => {
+      rowStarts.push(acc);
+      acc += row.nodeSize;
+    });
+
     if (info) {
-      // Suggesting mode: don't actually delete the row — mark it with
+      // Suggesting mode: don't actually delete the rows — mark each with
       // `trDel` and mirror `cellMarker: { kind: 'del' }` onto every cell.
-      // The row stays visible until accept; reject clears the marker.
-      tr.setNodeMarkup(rowStart, undefined, { ...rowNode.attrs, trDel: info });
-      let cellPos = rowStart + 1;
-      rowNode.forEach((cell) => {
-        if (cell.type.name === 'tableCell' || cell.type.name === 'tableHeader') {
-          tr.setNodeMarkup(cellPos, undefined, {
-            ...cell.attrs,
-            cellMarker: { kind: 'del', info },
-          });
-        }
-        cellPos += cell.nodeSize;
-      });
+      // The rows stay visible until accept; reject clears the marker.
+      for (let r = firstRow; r <= lastRow; r++) {
+        const rowNode = table.child(r);
+        const rowStart = rowStarts[r];
+        tr.setNodeMarkup(rowStart, undefined, { ...rowNode.attrs, trDel: info });
+        let cellPos = rowStart + 1;
+        rowNode.forEach((cell) => {
+          if (cell.type.name === 'tableCell' || cell.type.name === 'tableHeader') {
+            tr.setNodeMarkup(cellPos, undefined, {
+              ...cell.attrs,
+              cellMarker: { kind: 'del', info },
+            });
+          }
+          cellPos += cell.nodeSize;
+        });
+      }
     } else {
-      const rowEnd = rowStart + rowNode.nodeSize;
-      tr.delete(rowStart, rowEnd);
+      // Delete bottom-up so earlier rows' offsets stay valid.
+      for (let r = lastRow; r >= firstRow; r--) {
+        const rowNode = table.child(r);
+        const rowStart = rowStarts[r];
+        tr.delete(rowStart, rowStart + rowNode.nodeSize);
+      }
     }
     dispatch(tr.scrollIntoView());
   }

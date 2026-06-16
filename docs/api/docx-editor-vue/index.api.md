@@ -51,6 +51,7 @@ export interface DocxEditorHandle extends EditorHandle {
 export interface DocxEditorProps {
     author?: string;
     className?: string;
+    colorMode?: 'light' | 'dark' | 'system';
     disableFindReplaceShortcuts?: boolean;
     document?: Document_2 | null;
     documentBuffer?: DocxInput | null;
@@ -97,6 +98,9 @@ export type DocxEditorRef = EditorRefLike & {
     focus(): void;
     scrollToPage(pageNumber: number): void;
     scrollToPosition(pmPos: number): void;
+    scrollToCommentId(commentId: number): boolean;
+    scrollToChangeId(revisionId: number): boolean;
+    highlightRange(from: number, to: number): void;
     openPrintPreview(): void;
     print(): void;
     loadDocument(doc: Document_2): void;

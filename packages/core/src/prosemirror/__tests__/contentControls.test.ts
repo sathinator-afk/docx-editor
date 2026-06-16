@@ -14,6 +14,7 @@ import {
   setContentControlContentTr,
   removeContentControlTr,
   setContentControlValueTr,
+  setContentControlValueAtPosTr,
 } from '../contentControls';
 import {
   ContentControlNotFoundError,
@@ -28,6 +29,10 @@ function blockSdt(attrs: Record<string, unknown>, text: string) {
     attrs,
     schema.nodes.paragraph.create(null, schema.text(text))
   );
+}
+
+function inlineSdt(attrs: Record<string, unknown>, text: string) {
+  return schema.nodes.sdt.create(attrs, schema.text(text));
 }
 
 function makeState() {
@@ -46,6 +51,40 @@ describe('PM content-control addressing', () => {
     const all = findContentControlsInPM(state.doc);
     expect(all.map((c) => c.tag)).toEqual(['intro', 'locked']);
     expect(findContentControlsInPM(state.doc, { tag: 'intro' })[0].text).toBe('CONTROL #1');
+  });
+
+  test('finds inline content controls and preserves raw checkbox attrs', () => {
+    const rawPropertiesXml =
+      '<w:sdtPr><w:id w:val="77"/><w:tag w:val="option-alpha"/><w14:checkbox>' +
+      '<w14:checked w14:val="0"/><w14:checkedState w14:val="2612"/>' +
+      '<w14:uncheckedState w14:val="2610"/></w14:checkbox></w:sdtPr>';
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, [
+        schema.text('before '),
+        inlineSdt(
+          {
+            sdtType: 'checkbox',
+            id: 77,
+            tag: 'option-alpha',
+            alias: 'Option alpha',
+            checked: false,
+            dataBinding: JSON.stringify({ xpath: '/x', storeItemId: 'item' }),
+            rawPropertiesXml,
+          },
+          String.fromCodePoint(0x2610)
+        ),
+        schema.text(' after'),
+      ]),
+    ]);
+    const state = EditorState.create({ schema, doc });
+    const control = findContentControlsInPM(state.doc, { tag: 'option-alpha' })[0];
+
+    expect(control.sdtType).toBe('checkbox');
+    expect(control.id).toBe(77);
+    expect(control.text).toBe(String.fromCodePoint(0x2610));
+    expect(control.checked).toBe(false);
+    expect(control.dataBinding?.xpath).toBe('/x');
+    expect(state.doc.nodeAt(control.pos)?.attrs.rawPropertiesXml).toBe(rawPropertiesXml);
   });
 
   test('findContentControlPos returns the node position', () => {
@@ -137,6 +176,43 @@ describe('PM content-control addressing', () => {
     expect(node.attrs.checked).toBe(true);
     expect(node.textContent).toBe(String.fromCodePoint(0x2612));
     expect(String(node.attrs.rawPropertiesXml)).toContain('w14:val="1"');
+  });
+
+  test('setContentControlValueAtPosTr toggles an inline checkbox in place', () => {
+    const rawPropertiesXml =
+      '<w:sdtPr><w:tag w:val="option-alpha"/><w14:checkbox>' +
+      '<w14:checked w14:val="0"/><w14:checkedState w14:val="2612"/>' +
+      '<w14:uncheckedState w14:val="2610"/></w14:checkbox></w:sdtPr>';
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, [
+        schema.text('before '),
+        inlineSdt(
+          {
+            sdtType: 'checkbox',
+            tag: 'option-alpha',
+            checked: false,
+            rawPropertiesXml,
+          },
+          String.fromCodePoint(0x2610)
+        ),
+        schema.text(' after'),
+      ]),
+    ]);
+    const state = EditorState.create({ schema, doc });
+    const control = findContentControlsInPM(state.doc, { tag: 'option-alpha' })[0];
+    const next = state.apply(
+      setContentControlValueAtPosTr(state, control.pos, {
+        kind: 'checkbox',
+        checked: true,
+      })
+    );
+    const node = next.doc.nodeAt(control.pos)!;
+
+    expect(node.type.name).toBe('sdt');
+    expect(node.attrs.checked).toBe(true);
+    expect(node.textContent).toBe(String.fromCodePoint(0x2612));
+    expect(String(node.attrs.rawPropertiesXml)).toContain('w14:val="1"');
+    expect(next.doc.textContent).toBe(`before ${String.fromCodePoint(0x2612)} after`);
   });
 
   test('setContentControlValueTr selects a dropdown item by value', () => {

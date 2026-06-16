@@ -7,9 +7,7 @@
  * `sdtType` defaults to `richText`, `checked` is tri-state, the captured raw
  * `w:sdtPr`/`w:sdtEndPr` ride along as opaque strings for lossless save — so
  * the conversion lives in one place rather than being duplicated across the
- * to/from converters for each node. The inline `sdt` node does not declare
- * the `id`/`rawPropertiesXml`/`rawEndPropertiesXml` attrs; ProseMirror simply
- * ignores attrs absent from a node's spec, so passing the superset is safe.
+ * to/from converters for each node.
  */
 
 import type { SdtProperties } from '../../types/document';

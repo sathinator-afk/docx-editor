@@ -23,8 +23,10 @@ export function PageIndicator({
         right: 24,
         top: '50%',
         transform: 'translateY(-50%)',
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        color: 'white',
+        backgroundColor: 'var(--doc-overlay)',
+        // The overlay is always a dark scrim (both themes), so text stays light
+        // — --doc-on-primary flips dark in dark mode and would vanish here.
+        color: '#fff',
         padding: '6px 12px',
         borderRadius: '4px',
         fontSize: '12px',

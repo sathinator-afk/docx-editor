@@ -257,3 +257,8 @@ export {
 // trick can't drift between React, Vue, or any future framework host.
 export { readDocxFileFromInput } from './readDocxFile';
 export type { ReadDocxFileResult } from './readDocxFile';
+
+// Color-mode (light/dark/auto) resolution — shared so the prefers-color-scheme
+// + SSR handling stays identical across React, Vue, and future hosts.
+export { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from './colorMode';
+export type { ColorMode } from './colorMode';

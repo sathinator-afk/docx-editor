@@ -227,6 +227,17 @@ export type ImageRunPosition = {
 };
 
 // @public
+export interface InlineSdtWidget {
+    alias?: string;
+    checked?: boolean;
+    groupId: string;
+    // (undocumented)
+    kind: 'checkbox';
+    pos: number;
+    tag?: string;
+}
+
+// @public
 export type Layout = {
     pageSize: {
         w: number;
@@ -686,6 +697,7 @@ export type TextRun = RunFormatting & {
     hyperlink?: HyperlinkInfo;
     pmStart?: number;
     pmEnd?: number;
+    inlineSdtWidget?: InlineSdtWidget;
 };
 
 // @public (undocumented)

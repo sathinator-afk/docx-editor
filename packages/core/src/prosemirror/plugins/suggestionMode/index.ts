@@ -24,8 +24,9 @@ import { Plugin } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
 import { findAdjacentRevisionForRange } from './adjacency';
-import { applySuggestionInsert } from './handlers/insert';
+import { applySuggestionInsert, markRangeAsInserted } from './handlers/insert';
 import { handleSuggestionDelete } from './handlers/delete';
+import { applySuggestionPaste } from './handlers/paste';
 import {
   handleSuggestionBackspaceAtStart,
   handleSuggestionDeleteAtEnd,
@@ -99,6 +100,15 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
 
           return false;
         },
+      },
+      // Paste over a non-empty text selection is a replace: mark the old text
+      // deleted and the pasted text inserted, in one transaction, so both
+      // sides of the replacement are tracked. A plain paste at a collapsed
+      // cursor returns false and is marked by the append-transaction catch-all.
+      handlePaste(view, _event, slice) {
+        const pluginState = suggestionModeKey.getState(view.state);
+        if (!pluginState?.active) return false;
+        return applySuggestionPaste(view, slice, pluginState);
       },
       // Intercept Backspace and Delete to mark as deletion.
       // Enter splits the paragraph and marks the FIRST paragraph's pPrIns.
@@ -178,27 +188,16 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
               ) ?? makeMarkAttrs(pluginState);
             // Mark text AND inline atoms (image, shape) that don't already
             // carry a tracked-change mark, so a pasted/dropped picture becomes
-            // a tracked insertion just like typed text. Marking the whole range
-            // would overwrite other authors' marks, so we go node by node and
-            // skip any that the schema disallows marks on.
-            newState.doc.nodesBetween(newFrom, newTo, (node, pos) => {
-              // Text is the short-circuit (a leaf text node's own markSet is
-              // empty, so `allowsMarkType` is false even though the paragraph
-              // permits the mark); inline atoms (image, shape) go through the
-              // `allowsMarkType` arm. Dropping the text short-circuit silently
-              // stops tracking pasted text.
-              if (!node.isText && !(node.isInline && node.type.allowsMarkType(insertionType))) {
-                return;
-              }
-              const hasTrackedMark = node.marks.some(
-                (m) => m.type === insertionType || (deletionType && m.type === deletionType)
-              );
-              if (!hasTrackedMark) {
-                const nodeStart = Math.max(pos, newFrom);
-                const nodeEnd = Math.min(pos + node.nodeSize, newTo);
-                tr.addMark(nodeStart, nodeEnd, insertionType.create(markAttrs));
-              }
-            });
+            // a tracked insertion just like typed text.
+            markRangeAsInserted(
+              tr,
+              newState.doc,
+              newFrom,
+              newTo,
+              insertionType,
+              deletionType,
+              markAttrs
+            );
           }
         });
       });

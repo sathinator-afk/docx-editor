@@ -170,6 +170,7 @@ export {
   setContentControlContentTr,
   removeContentControlTr,
   setContentControlValueTr,
+  setContentControlValueAtPosTr,
   addRepeatingSectionItemTr,
   removeRepeatingSectionItemTr,
   type PMContentControl,

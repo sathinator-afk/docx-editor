@@ -194,7 +194,7 @@ export function useSelectionSync(opts: UseSelectionSyncOptions): UseSelectionSyn
           top: ${caret.y / zoom + scrollTop}px;
           width: 2px;
           height: ${caret.height}px;
-          background: #000;
+          background: var(--doc-caret, #000);
           pointer-events: none;
           z-index: ${Z_INDEX.selectionOverlay};
         `;

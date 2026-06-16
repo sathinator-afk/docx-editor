@@ -25,7 +25,6 @@ import { PMContentControl } from '@eigenpal/docx-editor-core/prosemirror';
 import * as prosemirror_state from 'prosemirror-state';
 import * as prosemirror_view from 'prosemirror-view';
 import * as React_2 from 'react';
-import * as react_jsx_runtime from 'react/jsx-runtime';
 import { ReactNode } from 'react';
 import { RenderedDomContext } from '@eigenpal/docx-editor-core/plugin-api';
 import { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
@@ -56,6 +55,7 @@ export interface DocxEditorProps {
     agentPanel?: AgentPanelOptions;
     author?: string;
     className?: string;
+    colorMode?: 'light' | 'dark' | 'system';
     comments?: Comment_2[];
     disableFindReplaceShortcuts?: boolean;
     document?: Document_2 | null;
@@ -173,6 +173,7 @@ export interface DocxEditorRef {
     } | null;
     getTotalPages: () => number;
     getZoom: () => number;
+    highlightRange: (from: number, to: number) => void;
     loadDocument: (doc: Document_2) => void;
     loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
     onContentChange: (listener: (document: Document_2) => void) => () => void;
@@ -194,6 +195,8 @@ export interface DocxEditorRef {
     save: (options?: {
         selective?: boolean;
     }) => Promise<ArrayBuffer | null>;
+    scrollToChangeId: (revisionId: number) => boolean;
+    scrollToCommentId: (commentId: number) => boolean;
     scrollToContentControl: (filter: ContentControlFilter) => boolean;
     scrollToPage: (pageNumber: number) => void;
     scrollToParaId: (paraId: string) => boolean;
@@ -215,7 +218,7 @@ export interface DocxEditorRef {
 export type EditorMode = 'editing' | 'suggesting' | 'viewing';
 
 // @public (undocumented)
-export function LocaleProvider(input: LocaleProviderProps): react_jsx_runtime.JSX.Element;
+export function LocaleProvider(input: LocaleProviderProps): React_2.JSX.Element;
 
 // @public (undocumented)
 export interface LocaleProviderProps {

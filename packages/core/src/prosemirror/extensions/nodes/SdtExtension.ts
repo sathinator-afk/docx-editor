@@ -17,6 +17,8 @@ export const SdtExtension = createNodeExtension({
     attrs: {
       /** SDT type: richText, plainText, date, dropdown, comboBox, checkbox, etc. */
       sdtType: { default: 'richText' },
+      /** Unique numeric id (`w:id`). Stored as number|null. */
+      id: { default: null },
       /** Alias (friendly name) */
       alias: { default: null },
       /** Tag (developer identifier) */
@@ -33,14 +35,26 @@ export const SdtExtension = createNodeExtension({
       listItems: { default: null },
       /** Checkbox checked state */
       checked: { default: null },
+      /** XML data binding (`w:dataBinding`) as JSON string */
+      dataBinding: { default: null },
+      /**
+       * Captured `<w:sdtPr>` XML (verbatim) for lossless round-trip. Not
+       * rendered; carried through so the serializer can replay it.
+       */
+      rawPropertiesXml: { default: null },
+      /** Captured `<w:sdtEndPr>` XML (verbatim), if present. */
+      rawEndPropertiesXml: { default: null },
     },
     parseDOM: [
       {
         tag: 'span.docx-sdt',
         getAttrs(dom) {
           const el = dom as HTMLElement;
+          const idRaw = el.dataset.id;
+          const idNum = idRaw != null && idRaw !== '' ? parseInt(idRaw, 10) : NaN;
           return {
             sdtType: el.dataset.sdtType || 'richText',
+            id: Number.isNaN(idNum) ? null : idNum,
             alias: el.dataset.alias || null,
             tag: el.dataset.tag || null,
             lock: el.dataset.lock || null,
@@ -50,6 +64,9 @@ export const SdtExtension = createNodeExtension({
             listItems: el.dataset.listItems || null,
             checked:
               el.dataset.checked === 'true' ? true : el.dataset.checked === 'false' ? false : null,
+            dataBinding: el.dataset.dataBinding || null,
+            rawPropertiesXml: el.dataset.rawPropertiesXml || null,
+            rawEndPropertiesXml: el.dataset.rawEndPropertiesXml || null,
           };
         },
       },
@@ -61,6 +78,7 @@ export const SdtExtension = createNodeExtension({
         'data-sdt-type': String(attrs.sdtType),
       };
 
+      if (attrs.id != null) dataAttrs['data-id'] = String(attrs.id);
       if (attrs.alias) dataAttrs['data-alias'] = String(attrs.alias);
       if (attrs.tag) dataAttrs['data-tag'] = String(attrs.tag);
       if (attrs.lock) dataAttrs['data-lock'] = String(attrs.lock);
@@ -69,6 +87,11 @@ export const SdtExtension = createNodeExtension({
       if (attrs.dateFormat) dataAttrs['data-date-format'] = String(attrs.dateFormat);
       if (attrs.listItems) dataAttrs['data-list-items'] = String(attrs.listItems);
       if (attrs.checked != null) dataAttrs['data-checked'] = String(attrs.checked);
+      if (attrs.dataBinding) dataAttrs['data-data-binding'] = String(attrs.dataBinding);
+      if (attrs.rawPropertiesXml)
+        dataAttrs['data-raw-properties-xml'] = String(attrs.rawPropertiesXml);
+      if (attrs.rawEndPropertiesXml)
+        dataAttrs['data-raw-end-properties-xml'] = String(attrs.rawEndPropertiesXml);
 
       // Checkbox renders with a checkbox-like indicator
       if (attrs.sdtType === 'checkbox') {

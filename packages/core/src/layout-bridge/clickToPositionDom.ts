@@ -395,6 +395,8 @@ export function clipRectToTableWindow(
   return { left: rect.left, top, right: rect.right, bottom };
 }
 
+const BLANK_LINE_SELECTION_WIDTH_PX = 4;
+
 export function getSelectionRectsFromDom(
   container: HTMLElement,
   from: number,
@@ -435,6 +437,19 @@ export function getSelectionRectsFromDom(
         pageIndex,
       });
     };
+
+    if (pmStart === pmEnd) {
+      const lineEl = spanEl.closest('.layout-line') as HTMLElement | null;
+      const lineBox = (lineEl ?? spanEl).getBoundingClientRect();
+      const markerLeft = spanEl.getBoundingClientRect().left;
+      pushClipped({
+        left: markerLeft,
+        top: lineBox.top,
+        right: markerLeft + BLANK_LINE_SELECTION_WIDTH_PX,
+        bottom: lineBox.bottom,
+      });
+      continue;
+    }
 
     // Tab runs render as fixed-width spans with no text node — use their box.
     if (spanEl.classList.contains('layout-run-tab')) {
@@ -492,6 +507,73 @@ export interface DomCaretPosition {
   pageIndex: number;
 }
 
+/**
+ * A table fragment clips its content with `overflow:hidden` + a fixed height,
+ * translating rows for the visible page window. When a row breaks mid-content
+ * across pages, the painter renders the SAME cell content in both fragments
+ * with identical `data-pm-start`/`data-pm-end` — only one copy is on-window.
+ * An element whose box lies outside its `.layout-table` fragment's box is the
+ * off-page duplicate and must not win the caret lookup (issue #763).
+ */
+function isClippedOutOfTableFragment(el: HTMLElement, rect: DOMRect): boolean {
+  // `:not(.layout-nested-table)` because only the page-fragment table carries
+  // the `overflow:hidden` + window translate; a nested table has no clip, so
+  // its box would never indicate the off-page duplicate (matches
+  // `clipRectToTableWindow`).
+  const tableEl = el.closest('.layout-table:not(.layout-nested-table)') as HTMLElement | null;
+  if (!tableEl) return false;
+  const t = tableEl.getBoundingClientRect();
+  const mid = (rect.top + rect.bottom) / 2;
+  return mid < t.top - 0.5 || mid > t.bottom + 0.5;
+}
+
+/** Build the caret position from a matched span (tab / text / empty run). */
+function caretFromSpan(
+  spanEl: HTMLElement,
+  pmPos: number,
+  pmStart: number,
+  overlayRect: DOMRect
+): DomCaretPosition {
+  const pageEl = spanEl.closest('.layout-page') as HTMLElement | null;
+  const pageIndex = pageEl ? Number(pageEl.dataset.pageNumber || 1) - 1 : 0;
+  const lineEl = spanEl.closest('.layout-line');
+  const lineHeight = lineEl ? (lineEl as HTMLElement).offsetHeight : 16;
+
+  const textNode = spanEl.firstChild;
+  const isTab = spanEl.classList.contains('layout-run-tab');
+  if (isTab || !textNode || textNode.nodeType !== Node.TEXT_NODE) {
+    // Tab or no text node — caret at the span's left edge.
+    const spanRect = spanEl.getBoundingClientRect();
+    return {
+      x: spanRect.left - overlayRect.left,
+      y: spanRect.top - overlayRect.top,
+      height: lineHeight,
+      pageIndex,
+    };
+  }
+
+  const text = textNode as Text;
+  const charIndex = Math.min(pmPos - pmStart, text.length);
+  const ownerDoc = spanEl.ownerDocument!;
+  const range = ownerDoc.createRange();
+  range.setStart(text, charIndex);
+  range.setEnd(text, charIndex);
+  const rangeRect = range.getBoundingClientRect();
+
+  // Caret height tracks the run AT the cursor, not the line box: on a line
+  // with mixed font sizes the line box is as tall as the largest run, but
+  // the caret should match the font where the insertion point sits, like
+  // Word (#748). The collapsed range's rect already reports the per-run
+  // font box (and its top is baseline-aligned), so use it; fall back to the
+  // line height if the browser returns a zero-height rect.
+  return {
+    x: rangeRect.left - overlayRect.left,
+    y: rangeRect.top - overlayRect.top,
+    height: rangeRect.height || lineHeight,
+    pageIndex,
+  };
+}
+
 export function getCaretPositionFromDom(
   container: HTMLElement,
   pmPos: number,
@@ -501,84 +583,41 @@ export function getCaretPositionFromDom(
   // when a body PM position happens to fall within an HF range.
   const spans = findBodyPmSpans(container);
 
+  // A position that lands inside a table cell which breaks across pages can
+  // match the SAME run painted in two fragments. Prefer the on-window copy;
+  // remember the first match as a fallback if every copy is clipped out.
+  let fallback: HTMLElement | null = null;
+  let fallbackStart = 0;
+
   for (const span of Array.from(spans)) {
     const spanEl = span as HTMLElement;
     const pmStart = Number(spanEl.dataset.pmStart);
     const pmEnd = Number(spanEl.dataset.pmEnd);
 
-    // Special handling for tab spans - use exclusive end to avoid boundary conflicts
-    // Tab at [5,6) means position 6 belongs to the next run, not the tab
-    if (spanEl.classList.contains('layout-run-tab')) {
-      if (pmPos >= pmStart && pmPos < pmEnd) {
-        const spanRect = spanEl.getBoundingClientRect();
-        const pageEl = spanEl.closest('.layout-page') as HTMLElement | null;
-        const pageIndex = pageEl ? Number(pageEl.dataset.pageNumber || 1) - 1 : 0;
-        const lineEl = spanEl.closest('.layout-line');
-        const lineHeight = lineEl ? (lineEl as HTMLElement).offsetHeight : 16;
+    // Tab spans use an exclusive end to avoid boundary conflicts: a tab at
+    // [5,6) means position 6 belongs to the next run, not the tab.
+    const isTab = spanEl.classList.contains('layout-run-tab');
+    const matches = isTab ? pmPos >= pmStart && pmPos < pmEnd : pmPos >= pmStart && pmPos <= pmEnd;
+    if (!matches) continue;
 
-        // Position caret at start of tab (only position within tab)
-        return {
-          x: spanRect.left - overlayRect.left,
-          y: spanRect.top - overlayRect.top,
-          height: lineHeight,
-          pageIndex,
-        };
+    const spanRect = spanEl.getBoundingClientRect();
+    if (isClippedOutOfTableFragment(spanEl, spanRect)) {
+      if (!fallback) {
+        fallback = spanEl;
+        fallbackStart = pmStart;
       }
-      continue; // Skip to next span
+      continue;
     }
-
-    // For text runs, use inclusive range
-    if (pmPos >= pmStart && pmPos <= pmEnd) {
-      const textNode = spanEl.firstChild;
-      if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
-        // No text - use span bounds
-        const spanRect = spanEl.getBoundingClientRect();
-        const pageEl = spanEl.closest('.layout-page') as HTMLElement | null;
-        const pageIndex = pageEl ? Number(pageEl.dataset.pageNumber || 1) - 1 : 0;
-        const lineEl = spanEl.closest('.layout-line');
-        const lineHeight = lineEl ? (lineEl as HTMLElement).offsetHeight : 16;
-
-        return {
-          x: spanRect.left - overlayRect.left,
-          y: spanRect.top - overlayRect.top,
-          height: lineHeight,
-          pageIndex,
-        };
-      }
-
-      const text = textNode as Text;
-      const charIndex = Math.min(pmPos - pmStart, text.length);
-
-      const ownerDoc = spanEl.ownerDocument;
-      if (!ownerDoc) continue;
-
-      const range = ownerDoc.createRange();
-      range.setStart(text, charIndex);
-      range.setEnd(text, charIndex);
-
-      const rangeRect = range.getBoundingClientRect();
-      const pageEl = spanEl.closest('.layout-page') as HTMLElement | null;
-      const pageIndex = pageEl ? Number(pageEl.dataset.pageNumber || 1) - 1 : 0;
-      const lineEl = spanEl.closest('.layout-line');
-      const lineHeight = lineEl ? (lineEl as HTMLElement).offsetHeight : 16;
-
-      // Caret height tracks the run AT the cursor, not the line box: on a line
-      // with mixed font sizes the line box is as tall as the largest run, but
-      // the caret should match the font where the insertion point sits, like
-      // Word (#748). The collapsed range's rect already reports the per-run
-      // font box (and its top is baseline-aligned), so use it; fall back to the
-      // line height if the browser returns a zero-height rect.
-      return {
-        x: rangeRect.left - overlayRect.left,
-        y: rangeRect.top - overlayRect.top,
-        height: rangeRect.height || lineHeight,
-        pageIndex,
-      };
-    }
+    return caretFromSpan(spanEl, pmPos, pmStart, overlayRect);
   }
 
-  // Check empty paragraphs
+  if (fallback) {
+    return caretFromSpan(fallback, pmPos, fallbackStart, overlayRect);
+  }
+
+  // Check empty paragraphs (prefer an on-window copy here too).
   const paragraphs = container.querySelectorAll('.layout-paragraph');
+  let pFallback: { el: HTMLElement; targetEl: HTMLElement } | null = null;
   for (const p of Array.from(paragraphs)) {
     const pEl = p as HTMLElement;
     const pStart = Number(pEl.dataset.pmStart);
@@ -586,22 +625,38 @@ export function getCaretPositionFromDom(
 
     if (pmPos >= pStart && pmPos <= pEnd) {
       const emptyRun = pEl.querySelector('.layout-empty-run');
-      const targetEl = emptyRun || pEl;
+      const targetEl = (emptyRun as HTMLElement) || pEl;
       const rect = targetEl.getBoundingClientRect();
-
-      const pageEl = pEl.closest('.layout-page') as HTMLElement | null;
-      const pageIndex = pageEl ? Number(pageEl.dataset.pageNumber || 1) - 1 : 0;
-      const lineEl = targetEl.closest('.layout-line') || targetEl;
-      const lineHeight = (lineEl as HTMLElement).offsetHeight || 16;
-
-      return {
-        x: rect.left - overlayRect.left,
-        y: rect.top - overlayRect.top,
-        height: lineHeight,
-        pageIndex,
-      };
+      if (isClippedOutOfTableFragment(pEl, rect)) {
+        if (!pFallback) pFallback = { el: pEl, targetEl };
+        continue;
+      }
+      return caretFromParagraph(pEl, targetEl, overlayRect);
     }
+  }
+  if (pFallback) {
+    return caretFromParagraph(pFallback.el, pFallback.targetEl, overlayRect);
   }
 
   return null;
+}
+
+/** Caret position for an empty paragraph / its empty-run placeholder. */
+function caretFromParagraph(
+  pEl: HTMLElement,
+  targetEl: HTMLElement,
+  overlayRect: DOMRect
+): DomCaretPosition {
+  const rect = targetEl.getBoundingClientRect();
+  const pageEl = pEl.closest('.layout-page') as HTMLElement | null;
+  const pageIndex = pageEl ? Number(pageEl.dataset.pageNumber || 1) - 1 : 0;
+  const lineEl = targetEl.closest('.layout-line') || targetEl;
+  const lineHeight = (lineEl as HTMLElement).offsetHeight || 16;
+
+  return {
+    x: rect.left - overlayRect.left,
+    y: rect.top - overlayRect.top,
+    height: lineHeight,
+    pageIndex,
+  };
 }

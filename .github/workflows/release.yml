@@ -45,7 +45,7 @@ jobs:
       id-token: write # OIDC for npm Trusted Publishing
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6.0.3
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -164,7 +164,7 @@ jobs:
       #   runs `publish` and creates per-package git tags.
       - name: Release PR or Publish
         id: changesets
-        uses: changesets/action@v1.8.0
+        uses: changesets/action@v1.9.0
         with:
           version: bun run version-packages
           publish: bunx changeset publish

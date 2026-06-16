@@ -1,6 +1,6 @@
 {
   "name": "@eigenpal/docx-editor-core",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "sideEffects": false,
   "description": "Framework-agnostic core for DOCX parsing, editing, and rendering",
   "main": "./dist/core.js",
@@ -173,6 +173,11 @@
       "import": "./dist/utils/comments.mjs",
       "require": "./dist/utils/comments.js"
     },
+    "./utils/stylePreview": {
+      "types": "./dist/utils/stylePreview.d.ts",
+      "import": "./dist/utils/stylePreview.mjs",
+      "require": "./dist/utils/stylePreview.js"
+    },
     "./utils/findReplace": {
       "types": "./dist/utils/findReplace.d.ts",
       "import": "./dist/utils/findReplace.mjs",
@@ -318,6 +323,11 @@
       "import": "./dist/prosemirror/tableResize.mjs",
       "require": "./dist/prosemirror/tableResize.js"
     },
+    "./prosemirror/cellDragSelection": {
+      "types": "./dist/prosemirror/cellDragSelection.d.ts",
+      "import": "./dist/prosemirror/cellDragSelection.mjs",
+      "require": "./dist/prosemirror/cellDragSelection.js"
+    },
     "./prosemirror/imageCommit": {
       "types": "./dist/prosemirror/imageCommit.d.ts",
       "import": "./dist/prosemirror/imageCommit.mjs",
@@ -457,6 +467,9 @@
       "utils/comments": [
         "./dist/utils/comments.d.ts"
       ],
+      "utils/stylePreview": [
+        "./dist/utils/stylePreview.d.ts"
+      ],
       "utils/findReplace": [
         "./dist/utils/findReplace.d.ts"
       ],
@@ -543,6 +556,9 @@
       ],
       "prosemirror/tableResize": [
         "./dist/prosemirror/tableResize.d.ts"
+      ],
+      "prosemirror/cellDragSelection": [
+        "./dist/prosemirror/cellDragSelection.d.ts"
       ],
       "prosemirror/imageCommit": [
         "./dist/prosemirror/imageCommit.d.ts"

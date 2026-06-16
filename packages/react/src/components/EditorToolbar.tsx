@@ -22,6 +22,7 @@ import { TitleBar, Logo, DocumentName, MenuBar, TitleBarRight } from './TitleBar
 import type { TitleBarProps, LogoProps, DocumentNameProps, TitleBarRightProps } from './TitleBar';
 import { Toolbar } from './Toolbar';
 import { cn } from '../lib/utils';
+import { Z_INDEX } from '../styles/zIndex';
 
 // ============================================================================
 // Main compound component
@@ -46,8 +47,8 @@ function EditorToolbarBase({
   return (
     <EditorToolbarContext.Provider value={toolbarProps}>
       <div
-        className={cn('flex flex-col bg-white shadow-sm flex-shrink-0', className)}
-        style={style}
+        className={cn('flex flex-col bg-doc-surface shadow-sm flex-shrink-0', className)}
+        style={{ position: 'relative', zIndex: Z_INDEX.toolbar, ...style }}
         data-testid="editor-toolbar"
       >
         {children}

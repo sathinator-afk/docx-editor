@@ -1,5 +1,23 @@
 # @eigenpal/docx-editor-core
 
+## 1.5.0
+
+### Minor Changes
+
+- 44161e5: Vue: enable drag-to-select table cells, matching React. Dragging across cell boundaries now produces a cell selection, so multi-cell operations (delete row/column across a range, fill, merge) are reachable by dragging. The cell-drag logic is shared between React and Vue in core.
+
+### Patch Changes
+
+- 7d02ec1: Fix the text cursor landing on the wrong page when a table cell's content spans a page break. The caret now follows the cell content onto the continuation page instead of staying on the previous page.
+- 04130ef: Fix "Delete row" so it removes every row a multi-cell selection spans, not just the anchor row. Selecting all rows now deletes the whole table, matching Word.
+- ab38192: Support clickable inline Word checkbox content controls
+- 5cdfa5c: Fix a tall empty gap appearing below an inline image that is wider than the page column. The painter fits such an image to the column width (scaling its height down), but the line height still reserved the image's unscaled height. The measurement now reserves the rendered (scaled) height, so the image and the following text sit flush. Most visible when inserting a large image in the Vue editor.
+- 335ad6c: Add `setGoogleFontsEnabled(false)` (from `@eigenpal/docx-editor-core` or its `/utils` entry) so strict-CSP / offline embedders can disable the automatic Google Fonts fetching entirely, and skip that fetch automatically when a font already renders locally. Embedded and consumer-hosted (`fonts` prop) faces keep their metric-compatible Google fallback for glyph coverage.
+- c5a4b1e: Fix inline images overlapping following text when they wrap to their own line, and custom-style list fidelity: zero-padded custom numbering renders as in Word (`[0001]`), picking a numbered style from the toolbar now attaches its numbering and indents, style-attached numbering keeps the style's indents over the level's, and removing a style's numbering no longer hangs the first line back to the margin. Fixes #765, fixes #766.
+- ca005c5: Fix suggesting mode so pasting over a selection marks the replaced text as a tracked deletion and the pasted text as a tracked insertion, matching the behavior of typing over a selection.
+- 7d6daeb: Fix table column widths not being respected when opening exported documents in Word. Tables with explicit column widths (created in the editor or resized by dragging a column boundary) now export with fixed layout so Word honors the widths instead of autofitting. Also corrects `w:tblPr` child ordering to match the OOXML schema.
+- 5cdfa5c: Vue: insert images directly from Insert > Image like React — the OS file picker opens and the image is placed inline, fitted to the page width, with no intermediate dialog. This also fixes a tall empty gap that appeared below an inserted image wider than the page column. The read-file-fit-and-insert flow now lives in core (`insertImageFromFile`), so React and Vue share one code path and behave identically.
+
 ## 1.4.0
 
 ### Minor Changes

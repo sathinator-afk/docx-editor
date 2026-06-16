@@ -30,6 +30,7 @@ import {
   eighthsToPixels,
   formatPx,
   halfPointsToPoints,
+  AUTO_PARAGRAPH_SPACING_PX,
 } from './units';
 
 /**
@@ -296,13 +297,20 @@ export function paragraphToStyle(
   // SPACING (margins)
   // ============================================================================
 
-  // Space before (marginTop)
-  if (formatting.spaceBefore !== undefined) {
+  // Space before (marginTop). `beforeAutospacing` (w:beforeAutospacing) means
+  // Word ignores any explicit w:before and renders automatic HTML-style spacing
+  // (~14px). Honor it so imported HTML-origin docs aren't rendered too tight
+  // (issue #811). Adjacent CSS margins collapse, matching Word's auto behavior.
+  if (formatting.beforeAutospacing) {
+    style.marginTop = formatPx(AUTO_PARAGRAPH_SPACING_PX);
+  } else if (formatting.spaceBefore !== undefined) {
     style.marginTop = formatPx(twipsToPixels(formatting.spaceBefore));
   }
 
   // Space after (marginBottom)
-  if (formatting.spaceAfter !== undefined) {
+  if (formatting.afterAutospacing) {
+    style.marginBottom = formatPx(AUTO_PARAGRAPH_SPACING_PX);
+  } else if (formatting.spaceAfter !== undefined) {
     style.marginBottom = formatPx(twipsToPixels(formatting.spaceAfter));
   }
 

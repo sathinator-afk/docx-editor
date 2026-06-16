@@ -259,7 +259,10 @@ export class LayoutPainter {
     pageEl.style.position = 'relative';
     pageEl.style.width = `${page.size.w}px`;
     pageEl.style.height = `${page.size.h}px`;
-    pageEl.style.backgroundColor = this.options.pageBackground ?? '#ffffff';
+    // CSS vars so .ep-root.dark re-themes the canvas (view transform only —
+    // saved DOCX unchanged). Mirrors applyPageStyles in renderPage.ts.
+    pageEl.style.backgroundColor = this.options.pageBackground ?? 'var(--doc-page-bg, #ffffff)';
+    pageEl.style.color = 'var(--doc-page-text, #000000)';
     pageEl.style.overflow = 'hidden';
 
     if (this.options.showShadow) {

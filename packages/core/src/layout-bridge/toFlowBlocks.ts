@@ -32,6 +32,7 @@ import type { Theme, SectionProperties } from '../types/document';
 import { resolveColorToHex } from '../utils/colorResolver';
 
 import { twipsToPixels, constrainImageToPage, nextBlockId } from './toFlowBlocks/shared';
+import { AUTO_PARAGRAPH_SPACING_PX } from '../utils/units';
 import type { ToFlowBlocksOptions } from './toFlowBlocks/shared';
 import { paragraphToRuns } from './toFlowBlocks/runs';
 import { convertBorderSpecToLayout, extractCellBorders } from './toFlowBlocks/borders';
@@ -74,13 +75,28 @@ function convertParagraphAttrs(
     // default to no alignment set (inherits from style or defaults to left)
   }
 
-  // Spacing
-  if (pmAttrs.spaceBefore != null || pmAttrs.spaceAfter != null || pmAttrs.lineSpacing != null) {
+  // Spacing. HTML-origin auto spacing (w:beforeAutospacing/afterAutospacing)
+  // rides on _originalFormatting and overrides any explicit before/after with
+  // Word's ~14px auto value — measure it here so pagination matches the rendered
+  // editor (issue #811).
+  const autoBefore = pmAttrs._originalFormatting?.beforeAutospacing;
+  const autoAfter = pmAttrs._originalFormatting?.afterAutospacing;
+  if (
+    autoBefore ||
+    autoAfter ||
+    pmAttrs.spaceBefore != null ||
+    pmAttrs.spaceAfter != null ||
+    pmAttrs.lineSpacing != null
+  ) {
     attrs.spacing = {};
-    if (pmAttrs.spaceBefore != null) {
+    if (autoBefore) {
+      attrs.spacing.before = AUTO_PARAGRAPH_SPACING_PX;
+    } else if (pmAttrs.spaceBefore != null) {
       attrs.spacing.before = twipsToPixels(pmAttrs.spaceBefore);
     }
-    if (pmAttrs.spaceAfter != null) {
+    if (autoAfter) {
+      attrs.spacing.after = AUTO_PARAGRAPH_SPACING_PX;
+    } else if (pmAttrs.spaceAfter != null) {
       attrs.spacing.after = twipsToPixels(pmAttrs.spaceAfter);
     }
     if (pmAttrs.lineSpacing != null) {

@@ -38,6 +38,13 @@ const EIGHTHS_PER_INCH = 576;
 /** Pixels per inch at standard DPI */
 export const PIXELS_PER_INCH = STANDARD_DPI;
 
+/**
+ * Automatic paragraph spacing applied for `w:beforeAutospacing` /
+ * `w:afterAutospacing` (HTML-origin "auto" spacing). Word renders these as
+ * ~14px before/after regardless of any explicit `w:before`/`w:after` value.
+ */
+export const AUTO_PARAGRAPH_SPACING_PX = 14;
+
 // ============================================================================
 // TWIPS CONVERSIONS
 // ============================================================================

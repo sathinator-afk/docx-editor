@@ -273,7 +273,9 @@ export function serializeInlineSdt(sdt: InlineSdt): string {
     })
     .join('');
 
-  return `<w:sdt><w:sdtPr>${prParts.join('')}</w:sdtPr><w:sdtContent>${contentXml}</w:sdtContent></w:sdt>`;
+  const sdtPrXml = props.rawPropertiesXml ?? `<w:sdtPr>${prParts.join('')}</w:sdtPr>`;
+  const sdtEndPrXml = props.rawEndPropertiesXml ?? '';
+  return `<w:sdt>${sdtPrXml}${sdtEndPrXml}<w:sdtContent>${contentXml}</w:sdtContent></w:sdt>`;
 }
 
 function serializeMoveRangeStart(
