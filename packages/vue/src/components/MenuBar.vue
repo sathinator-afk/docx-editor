@@ -126,12 +126,12 @@ const helpItems = computed<MenuEntry[]>(() => [
   background: transparent;
   cursor: pointer;
   font-size: 13px;
-  color: #374151;
+  color: var(--doc-text);
   width: 100%;
   text-align: left;
   white-space: nowrap;
 }
 .menu-bar__break-item:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 </style>

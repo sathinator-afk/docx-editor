@@ -64,7 +64,7 @@ function BreakSubmenu({ items, closeMenu }: { items: BreakSubmenuItem[]; closeMe
             onMouseOver={(e) => {
               if (!disabled) {
                 (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                  'var(--doc-hover, #f3f4f6)';
+                  'var(--doc-bg-hover, #f3f4f6)';
               }
             }}
             onMouseOut={(e) => {

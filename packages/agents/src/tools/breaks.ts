@@ -29,8 +29,9 @@ export const insertBreak: AgentToolDefinition<{
     '`type: "page"` adds a page break so following content starts on a new page. ' +
     '`type: "sectionNextPage"` starts a new document section on a new page. ' +
     '`type: "sectionContinuous"` starts a new section on the same page (use this ' +
-    'to change column layout or margins from that point onward). The break is ' +
-    'placed at the end of the target paragraph. Direct edit — not a tracked change.',
+    'to change column layout or margins from that point onward). The target ' +
+    'paragraph becomes the end of its page/section and the next paragraph begins ' +
+    'the new one. Direct edit — not a tracked change.',
   inputSchema: {
     type: 'object',
     properties: {

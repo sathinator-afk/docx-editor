@@ -19,8 +19,6 @@
 import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { applyStyle } from './commands/paragraph';
-import { insertPageBreak } from './commands/pageBreak';
-import { insertSectionBreakNextPage, insertSectionBreakContinuous } from './commands/sectionBreak';
 import type { StyleResolver } from './styles';
 import type { NumberingMap } from '../docx/numberingParser';
 import { mapHexToHighlightName } from '../utils/highlightColors';
@@ -201,42 +199,57 @@ export interface InsertBreakOptions {
   type: BreakKind;
 }
 
-const BREAK_COMMANDS = {
-  page: insertPageBreak,
-  sectionNextPage: insertSectionBreakNextPage,
-  sectionContinuous: insertSectionBreakContinuous,
-} as const;
-
 /**
  * Insert a page or section break after the paragraph identified by `paraId`.
  *
- * The break is anchored to the end of the target paragraph (so that paragraph
- * becomes the page/section end), reusing the same commands the Insert > Break
- * menu uses. The user's selection is preserved (mapped through the edit) rather
- * than following the inserted break. Returns false when the paraId can't be
- * resolved or `type` is unknown.
+ * This is the agent edit path. It produces the same document shape as the
+ * headless `reviewerBridge.insertBreak` (so a given `insert_break` call yields
+ * identical output whether the agent drives a live editor or the headless
+ * reviewer) — which is intentionally leaner than the interactive Insert > Break
+ * menu command:
+ *
+ * - `page`: insert a single page-break node right after the target paragraph.
+ *   `fromProseDoc` converts it to a break-run paragraph, matching the headless
+ *   model. No trailing empty paragraph (the menu command adds one for caret
+ *   placement; the agent keeps the caret where it was).
+ * - `sectionNextPage` / `sectionContinuous`: a section break is the `sectPr`
+ *   carried by the section's *last* paragraph, so mark the target paragraph
+ *   directly. No new block — the existing following paragraph starts the new
+ *   section.
+ *
+ * The user's selection is preserved (mapped through the edit) rather than
+ * following the inserted break. Returns false when the paraId can't be resolved
+ * or `type` is unknown.
  */
 export function insertBreak(view: EditorView, options: InsertBreakOptions): boolean {
-  const command = BREAK_COMMANDS[options.type];
-  if (!command) return false;
-
   const range = findParaIdRange(view.state.doc, options.paraId);
   if (!range) return false;
 
-  // `range.to - 1` is the end of the paragraph's content (before its close
-  // token) — anchoring the cursor there triggers the commands' end-of-block
-  // path, which appends the break after this paragraph.
-  const endPos = range.to - 1;
-  const stateWithSel = view.state.apply(
-    view.state.tr.setSelection(TextSelection.create(view.state.doc, endPos))
-  );
+  const { state } = view;
+  // `range.from` is the position of the target paragraph node itself;
+  // `range.to` is just after its closing token.
+  const targetPara = state.doc.nodeAt(range.from);
+  if (!targetPara) return false;
 
-  let didApply = false;
-  command(stateWithSel, (newTr) => {
-    didApply = true;
-    newTr.setSelection(view.state.selection.map(newTr.doc, newTr.mapping));
-    view.dispatch(newTr);
-  });
+  const tr = state.tr;
 
-  return didApply;
+  if (options.type === 'page') {
+    const pageBreakType = state.schema.nodes.pageBreak;
+    if (!pageBreakType) return false;
+    tr.insert(range.to, pageBreakType.create());
+  } else if (options.type === 'sectionNextPage' || options.type === 'sectionContinuous') {
+    const sectionBreakType = options.type === 'sectionNextPage' ? 'nextPage' : 'continuous';
+    tr.setNodeMarkup(range.from, undefined, {
+      ...targetPara.attrs,
+      sectionBreakType,
+    });
+  } else {
+    return false;
+  }
+
+  // Map the caller's selection through the structural edit so the caret stays
+  // put instead of jumping to the break.
+  tr.setSelection(state.selection.map(tr.doc, tr.mapping));
+  view.dispatch(tr);
+  return true;
 }
