@@ -55,21 +55,72 @@ export function hasImageVisualAttrs(v: ImageVisualAttrs): boolean {
   );
 }
 
+/** True when an OOXML `srcRect` crop is present on any edge. */
+export function hasImageCrop(v: ImageVisualAttrs): boolean {
+  return Boolean(v.cropTop || v.cropRight || v.cropBottom || v.cropLeft);
+}
+
 /**
- * Apply crop and opacity to an `<img>` element. Caller should gate with
- * `hasImageVisualAttrs(v)` to avoid the function call for plain images.
+ * Apply opacity to an `<img>`. Crop is handled structurally by
+ * {@link applyImageCrop} — a flat `clip-path: inset()` can't reduce the layout
+ * footprint and, combined with the box-sized `<img>`, leaves the source
+ * stretched (squashed) rather than showing the cropped region.
  */
 export function applyImageVisualAttrs(img: HTMLImageElement, v: ImageVisualAttrs): void {
+  if (v.opacity != null && v.opacity < 1) {
+    img.style.opacity = String(Math.max(0, v.opacity));
+  }
+}
+
+/**
+ * Render an OOXML `srcRect` crop correctly. `srcRect` trims fractions off each
+ * edge of the SOURCE; the remaining region is then displayed at `displayW ×
+ * displayH`. The naive "size the img to the box + clip the box" approach
+ * stretches the whole source into the box (distorted) before clipping. Instead,
+ * scale the img to the FULL uncropped size that makes the visible region fill
+ * the box, offset it by the trimmed edges, and clip with an `overflow:hidden`
+ * wrapper — so the cropped region fills the box at the source's own proportions.
+ *
+ * Returns the element to insert: a wrapper when cropped, else the `<img>`
+ * unchanged (plain images are untouched).
+ */
+export function applyImageCrop(
+  img: HTMLImageElement,
+  v: ImageVisualAttrs,
+  displayW: number,
+  displayH: number,
+  doc: Document
+): HTMLElement {
   const top = v.cropTop ?? 0;
   const right = v.cropRight ?? 0;
   const bottom = v.cropBottom ?? 0;
   const left = v.cropLeft ?? 0;
-  if (top || right || bottom || left) {
-    img.style.clipPath = `inset(${top * 100}% ${right * 100}% ${bottom * 100}% ${left * 100}%)`;
-  }
-  if (v.opacity != null && v.opacity < 1) {
-    img.style.opacity = String(Math.max(0, v.opacity));
-  }
+  if (!(top || right || bottom || left)) return img;
+  const visW = 1 - left - right;
+  const visH = 1 - top - bottom;
+  if (visW <= 0 || visH <= 0) return img;
+
+  const fullW = displayW / visW;
+  const fullH = displayH / visH;
+
+  const wrap = doc.createElement('span');
+  wrap.style.display = 'inline-block';
+  wrap.style.overflow = 'hidden';
+  wrap.style.width = `${displayW}px`;
+  wrap.style.height = `${displayH}px`;
+  wrap.style.verticalAlign = 'middle';
+
+  img.style.width = `${fullW}px`;
+  img.style.height = `${fullH}px`;
+  img.style.maxWidth = 'none';
+  img.style.aspectRatio = 'auto';
+  img.style.marginLeft = `${-left * fullW}px`;
+  img.style.marginTop = `${-top * fullH}px`;
+  img.style.clipPath = '';
+  img.style.display = 'block';
+
+  wrap.appendChild(img);
+  return wrap;
 }
 
 /**

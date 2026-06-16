@@ -18,7 +18,12 @@ import type {
 } from '../../layout-engine/types';
 import type { RenderContext } from '../renderPage';
 import { isFloatingImageRun } from '../floatingImageFlow';
-import { applyImageVisualAttrs, hasImageVisualAttrs } from '../renderImage';
+import {
+  applyImageVisualAttrs,
+  hasImageVisualAttrs,
+  hasImageCrop,
+  applyImageCrop,
+} from '../renderImage';
 import { resolveFontFamily } from '../../utils/fontResolver';
 import {
   PARAGRAPH_CLASS_NAMES,
@@ -489,6 +494,17 @@ function renderInlineImageRun(run: ImageRun, doc: Document): HTMLElement {
     return wrapper;
   }
 
+  // Cropped image (OOXML srcRect): scale the cropped region to fill the display
+  // box inside an overflow-hidden wrapper, instead of stretching the whole
+  // source into the box (which squashes it). Done before the responsive
+  // aspect-ratio path below, which assumes an uncropped img.
+  if (hasImageCrop(run)) {
+    const wrapped = applyImageCrop(img, run, run.width, run.height, doc);
+    applyInlineImageDist(wrapped, run);
+    applyPmPositions(wrapped, run.pmStart, run.pmEnd);
+    return wrapped;
+  }
+
   // Tailwind preflight resets `<img>` to `display: block`, which breaks the
   // inline run flow: an inline image preceded and followed by text would push
   // the trailing text to a new visual row inside the line div, overflowing the
@@ -567,7 +583,18 @@ function renderBlockImage(run: ImageRun, doc: Document): HTMLElement {
   }
 
   applyPmPositions(container, run.pmStart, run.pmEnd);
-  container.appendChild(img);
+
+  // Cropped image (OOXML srcRect): wrap so the cropped region fills the box at
+  // the source's proportions rather than stretching the whole image. Rotation +
+  // crop is handled by the absolute-positioned img above; skip wrapping then.
+  if (deg === 0 && hasImageCrop(run)) {
+    const wrapped = applyImageCrop(img, run, run.width, run.height, doc);
+    wrapped.style.marginLeft = 'auto';
+    wrapped.style.marginRight = 'auto';
+    container.appendChild(wrapped);
+  } else {
+    container.appendChild(img);
+  }
 
   return container;
 }
