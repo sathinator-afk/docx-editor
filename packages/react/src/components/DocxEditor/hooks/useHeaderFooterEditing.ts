@@ -24,6 +24,7 @@ import type { InlineHeaderFooterEditorRef } from '../../InlineHeaderFooterEditor
 export function useHeaderFooterEditing({
   document,
   pushDocument,
+  notifyChange,
   hfEditorRef,
   containerRef,
   initialSectionProperties,
@@ -35,6 +36,10 @@ export function useHeaderFooterEditing({
 }: {
   document: Document | null;
   pushDocument: (doc: Document) => void;
+  // Commit a header/footer CONTENT change through the host onChange path (so the
+  // embedding app sees the edit and can mark the document dirty / save it).
+  // Falls back to pushDocument (history only) when not supplied.
+  notifyChange?: (doc: Document) => void;
   hfEditorRef: React.RefObject<InlineHeaderFooterEditorRef | null>;
   containerRef: React.RefObject<HTMLDivElement | null>;
   initialSectionProperties: SectionProperties | undefined;
@@ -194,12 +199,12 @@ export function useHeaderFooterEditing({
             [mapKey]: newMap,
           },
         };
-        pushDocument(newDoc);
+        (notifyChange ?? pushDocument)(newDoc);
       }
 
       setHfEditPosition(null);
     },
-    [hfEditPosition, hfEditIsFirstPage, document, pushDocument, setHfEditPosition]
+    [hfEditPosition, hfEditIsFirstPage, document, pushDocument, notifyChange, setHfEditPosition]
   );
 
   const handleBodyClick = useCallback(() => {
@@ -254,11 +259,11 @@ export function useHeaderFooterEditing({
             : pkg.document,
         },
       };
-      pushDocument(newDoc);
+      (notifyChange ?? pushDocument)(newDoc);
     }
 
     setHfEditPosition(null);
-  }, [hfEditPosition, hfEditIsFirstPage, document, pushDocument, setHfEditPosition]);
+  }, [hfEditPosition, hfEditIsFirstPage, document, pushDocument, notifyChange, setHfEditPosition]);
 
   const getHfTargetElement = useCallback(
     (pos: 'header' | 'footer'): HTMLElement | null => {

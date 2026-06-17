@@ -1242,6 +1242,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   } = useHeaderFooterEditing({
     document: history.state,
     pushDocument,
+    notifyChange: handleDocumentChange, // HF content edits must reach host onChange
     hfEditorRef,
     containerRef,
     initialSectionProperties,
