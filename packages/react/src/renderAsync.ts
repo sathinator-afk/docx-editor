@@ -49,6 +49,13 @@ export interface DocxEditorHandle extends EditorHandle {
   /** Live comment threads (ids match the live ProseMirror comment marks), for a
    * host rendering its own comment UI that must refresh after add/reply/resolve. */
   getComments: () => Comment[];
+  /** Add a comment, anchored by Word `w14:paraId` (+ optional unique `search`
+   * phrase within that paragraph). Returns the comment id, or null. */
+  addComment: (options: { paraId: string; text: string; author: string; search?: string }) => number | null;
+  /** Reply to an existing comment thread. Returns the reply id, or null. */
+  replyToComment: (commentId: number, text: string, author: string) => number | null;
+  /** Resolve (mark done) a comment. */
+  resolveComment: (commentId: number) => void;
 }
 
 /**
@@ -85,6 +92,10 @@ export function renderAsync(
       },
       getDocument: () => ref.current?.getDocument() ?? null,
       getComments: () => ref.current?.getComments() ?? [],
+      addComment: (options) => ref.current?.addComment(options) ?? null,
+      replyToComment: (commentId, text, author) =>
+        ref.current?.replyToComment(commentId, text, author) ?? null,
+      resolveComment: (commentId) => ref.current?.resolveComment(commentId),
       focus: () => ref.current?.focus(),
       setZoom: (z) => ref.current?.setZoom(z),
       scrollToParaId: (paraId: string) => ref.current?.scrollToParaId(paraId) ?? false,

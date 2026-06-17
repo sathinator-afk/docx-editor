@@ -1,4 +1,4 @@
-import { useImperativeHandle } from 'react';
+import { useImperativeHandle, useRef } from 'react';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import { DocumentAgent } from '@eigenpal/docx-editor-core/agent';
@@ -89,6 +89,12 @@ export function useDocxEditorRefApi({
   ) => ReturnType<typeof createStyleResolver>;
   commentIdAllocator: CommentIdAllocator;
 }) {
+  // Always-current mirror of `comments` so getComments() returns live threads
+  // (the useImperativeHandle factory closure would otherwise be stale, and a host
+  // rendering its own comment UI needs ids that match the live PM marks).
+  const commentsRef = useRef(comments);
+  commentsRef.current = comments;
+
   useImperativeHandle(
     ref,
     () => ({
@@ -192,7 +198,7 @@ export function useDocxEditorRefApi({
 
       getSelectionInfo: () => getSelectionInfoCore(pagedEditorRef.current?.getView() ?? null),
 
-      getComments: () => comments,
+      getComments: () => commentsRef.current,
 
       getContentControls: (filter?: ContentControlFilter): PMContentControl[] => {
         const view = pagedEditorRef.current?.getView();
