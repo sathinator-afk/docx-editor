@@ -26,6 +26,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { DocxEditor, type DocxEditorProps, type DocxEditorRef } from './components/DocxEditor';
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
+import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import type { EditorHandle } from '@eigenpal/docx-editor-core';
 
 /**
@@ -45,6 +46,9 @@ export interface DocxEditorHandle extends EditorHandle {
   scrollToParaId: (paraId: string) => boolean;
   /** Scroll to a raw ProseMirror document position. */
   scrollToPosition: (pmPos: number) => void;
+  /** Live comment threads (ids match the live ProseMirror comment marks), for a
+   * host rendering its own comment UI that must refresh after add/reply/resolve. */
+  getComments: () => Comment[];
 }
 
 /**
@@ -80,6 +84,7 @@ export function renderAsync(
         });
       },
       getDocument: () => ref.current?.getDocument() ?? null,
+      getComments: () => ref.current?.getComments() ?? [],
       focus: () => ref.current?.focus(),
       setZoom: (z) => ref.current?.setZoom(z),
       scrollToParaId: (paraId: string) => ref.current?.scrollToParaId(paraId) ?? false,
