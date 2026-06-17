@@ -129,6 +129,35 @@ export function createTabRun(): Run {
 }
 
 /**
+ * Create a Run from a `fieldMarker` PM node — the raw `fieldChar` / `instrText`
+ * content of a multi-paragraph field (e.g. a TOC), so it serializes back to
+ * `<w:fldChar>` / `<w:instrText>` and the field round-trips on the save path.
+ */
+export function createFieldMarkerRun(node: PMNode): Run {
+  const a = node.attrs as {
+    markerType: string;
+    charType: 'begin' | 'separate' | 'end';
+    instr: string;
+    fldLock: boolean;
+    dirty: boolean;
+  };
+  if (a.markerType === 'instrText') {
+    return { type: 'run', content: [{ type: 'instrText', text: a.instr ?? '' }] };
+  }
+  return {
+    type: 'run',
+    content: [
+      {
+        type: 'fieldChar',
+        charType: a.charType || 'begin',
+        ...(a.fldLock ? { fldLock: true } : {}),
+        ...(a.dirty ? { dirty: true } : {}),
+      },
+    ],
+  };
+}
+
+/**
  * Create a SimpleField or ComplexField from a PM field node
  */
 export function createFieldFromNode(

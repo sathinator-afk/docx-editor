@@ -33,6 +33,7 @@ import {
   createBreakRun,
   createTabRun,
   createFieldFromNode,
+  createFieldMarkerRun,
   createMathFromNode,
   createImageRun,
   createShapeRun,
@@ -476,6 +477,14 @@ function extractParagraphContent(paragraph: PMNode): ParagraphContent[] {
         currentMarksKey = null;
       }
       content.push(createFieldFromNode(node, node.marks));
+    } else if (node.type.name === 'fieldMarker') {
+      // Raw field char / instruction of a multi-paragraph field (e.g. TOC).
+      if (currentRun) {
+        content.push(currentRun);
+        currentRun = null;
+        currentMarksKey = null;
+      }
+      content.push(createFieldMarkerRun(node));
     } else if (node.type.name === 'sdt') {
       // SDT ends current run and emits an InlineSdt content item
       if (currentRun) {

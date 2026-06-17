@@ -167,6 +167,27 @@ function convertRunContent(content: RunContent, marks: ReturnType<typeof schema.
       return [convertShape(shp)];
     }
 
+    case 'fieldChar':
+      // Raw field character (begin/separate/end) of a multi-paragraph field
+      // (e.g. a TOC). Carried invisibly so the field round-trips on save.
+      return [
+        schema.node('fieldMarker', {
+          markerType: 'fieldChar',
+          charType: content.charType,
+          fldLock: content.fldLock ?? false,
+          dirty: content.dirty ?? false,
+        }, undefined, marks),
+      ];
+
+    case 'instrText':
+      // Field instruction text of a multi-paragraph field.
+      return [
+        schema.node('fieldMarker', {
+          markerType: 'instrText',
+          instr: content.text ?? '',
+        }, undefined, marks),
+      ];
+
     case 'footnoteRef':
       // Footnote reference - render as superscript number with footnoteRef mark
       const footnoteMark = schema.mark('footnoteRef', {
