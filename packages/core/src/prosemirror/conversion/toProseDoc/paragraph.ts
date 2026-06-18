@@ -48,6 +48,12 @@ export function convertParagraph(
 
   // Track active comment ranges for this paragraph
   const commentIds = activeCommentIds ?? new Set<number>();
+  // Ids that have a commentRangeStart/End in this paragraph — i.e. RANGED
+  // comments. A w:commentReference always follows its w:commentRangeEnd in the
+  // same paragraph, so a reference whose id is NOT here is a range-less "point"
+  // comment that must be carried through (the ranged ones are regenerated from
+  // their comment mark on save — see the commentReference branch below).
+  const paraRangeIds = new Set<number>();
 
   // Get style-based text formatting (font size, bold, color, etc.)
   let styleRunFormatting: TextFormatting | undefined;
@@ -66,16 +72,20 @@ export function convertParagraph(
   for (const content of paragraph.content) {
     if (content.type === 'commentRangeStart') {
       commentIds.add(content.id);
+      paraRangeIds.add(content.id);
     } else if (content.type === 'commentRangeEnd') {
       commentIds.delete(content.id);
+      paraRangeIds.add(content.id);
     } else if (content.type === 'commentReference') {
-      // Intentionally not converted to a PM node. Editor comments are `comment`
-      // marks over a range; the reference run is regenerated from those marks on
-      // save (see insertCommentRanges in fromProseDoc/paragraph.ts), so keeping
-      // it here would double-emit on the next save. A range-less "point" comment
-      // can't be expressed as a zero-width mark and so is dropped on the editor
-      // path — it still round-trips losslessly via parseDocx→repackDocx.
-      // See eigenpal/docx-editor#837.
+      // RANGED comment: its reference run is regenerated from the `comment` mark
+      // on save (insertCommentRanges in fromProseDoc/paragraph.ts), so skip it
+      // here to avoid a double-emit. RANGE-LESS "point" comment (no start/end for
+      // this id in this paragraph): there is no mark, so carry the lone reference
+      // through as an invisible commentRef node that fromProseDoc re-emits.
+      // See eigenpal/docx-editor#837 (this completes the editor-path side).
+      if (!paraRangeIds.has(content.id)) {
+        inlineNodes.push(schema.node('commentRef', { commentId: content.id }));
+      }
     } else if (content.type === 'run') {
       let runNodes = convertRun(content, mergedStyleRunFormatting, styleResolver);
       if (commentIds.size > 0) {

@@ -485,6 +485,19 @@ function extractParagraphContent(paragraph: PMNode): ParagraphContent[] {
         currentMarksKey = null;
       }
       content.push(createFieldMarkerRun(node));
+    } else if (node.type.name === 'commentRef') {
+      // Range-less "point" comment anchor — re-emit its lone <w:commentReference>.
+      // (Ranged comments' references come from insertCommentRanges via marks; the
+      // two sources are disjoint by id, so no double-emit. See #837.)
+      if (currentRun) {
+        content.push(currentRun);
+        currentRun = null;
+        currentMarksKey = null;
+      }
+      content.push({
+        type: 'commentReference',
+        id: (node.attrs as { commentId: number }).commentId,
+      });
     } else if (node.type.name === 'sdt') {
       // SDT ends current run and emits an InlineSdt content item
       if (currentRun) {
