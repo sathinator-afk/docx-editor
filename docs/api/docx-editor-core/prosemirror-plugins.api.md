@@ -11,6 +11,9 @@ import { PluginKey } from 'prosemirror-state';
 import { Transaction } from 'prosemirror-state';
 
 // @public
+export function applyTrackedParagraphInsert(view: EditorView, from: number, to: number, paragraphs: string[], pluginState: SuggestionModeState): MarkAttrs | null;
+
+// @public
 export function applyTrackedReplaceKeepingMarks(view: EditorView, from: number, to: number, text: string, pluginState: SuggestionModeState): MarkAttrs | null;
 
 // @public

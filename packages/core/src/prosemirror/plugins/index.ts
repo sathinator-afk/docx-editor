@@ -23,6 +23,7 @@ export {
   setSuggestionMode,
   isSuggestionModeActive,
   applyTrackedReplaceKeepingMarks,
+  applyTrackedParagraphInsert,
 } from './suggestionMode';
 export {
   documentStylesKey,

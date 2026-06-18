@@ -212,4 +212,4 @@ export { suggestionModeKey, SUGGESTION_BYPASS_META } from './state';
 export { toggleSuggestionMode, setSuggestionMode, isSuggestionModeActive } from './commands';
 // Programmatic tracked replace that preserves run formatting — used by
 // embedders applying AI/agent edits as accept/reject suggestions.
-export { applyTrackedReplaceKeepingMarks } from './handlers/insert';
+export { applyTrackedReplaceKeepingMarks, applyTrackedParagraphInsert } from './handlers/insert';
