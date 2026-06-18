@@ -45,6 +45,15 @@ export const DocxEditor: React_2.ForwardRefExoticComponent<DocxEditorProps & Rea
 
 // @public
 export interface DocxEditorHandle extends EditorHandle {
+    addComment: (options: {
+        paraId: string;
+        text: string;
+        author: string;
+        search?: string;
+    }) => number | null;
+    getComments: () => Comment_2[];
+    replyToComment: (commentId: number, text: string, author: string) => number | null;
+    resolveComment: (commentId: number) => void;
     scrollToParaId: (paraId: string) => boolean;
     scrollToPosition: (pmPos: number) => void;
     setZoom: (zoom: number) => void;

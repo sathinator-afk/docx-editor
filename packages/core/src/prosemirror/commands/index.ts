@@ -152,3 +152,10 @@ export type { SplitCellDialogConfig } from './tableSplit';
 
 // Watermark
 export { setWatermark, getWatermarkFromState } from './watermark';
+
+// History — re-export prosemirror-history's undo/redo from THIS package so hosts
+// (e.g. the Cuneon native shell) drive the same history plugin the editor's
+// HistoryExtension installs. Importing prosemirror-history directly in a host
+// bundle resolves a separate copy whose PluginKey wouldn't match, so undo/redo
+// would silently no-op. Routing through core guarantees a single instance.
+export { undo, redo } from 'prosemirror-history';

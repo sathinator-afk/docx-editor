@@ -10,7 +10,9 @@ import { EditorView } from 'prosemirror-view';
 import { Mark } from 'prosemirror-model';
 import { MarkType } from 'prosemirror-model';
 import { Node as Node_2 } from 'prosemirror-model';
+import { redo } from 'prosemirror-history';
 import { Transaction } from 'prosemirror-state';
+import { undo } from 'prosemirror-history';
 
 // @public
 export function acceptAllChanges(): Command;
@@ -222,6 +224,8 @@ export function mergeCells(state: EditorState, dispatch?: (tr: Transaction) => v
 
 // @public (undocumented)
 export const oneAndHalfSpacing: Command;
+
+export { redo }
 
 // @public
 export function rejectAllChanges(): Command;
@@ -480,5 +484,7 @@ export const toggleSuperscript: Command;
 
 // @public (undocumented)
 export const toggleUnderline: Command;
+
+export { undo }
 
 ```
