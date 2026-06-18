@@ -824,13 +824,22 @@ export function renderPage(
 
   // Render footnote area at the bottom of the content area (above footer)
   if (options.footnoteArea && options.footnoteArea.length > 0) {
-    const fnAreaEl = renderFootnoteArea(options.footnoteArea, contentWidth, context, doc);
+    const footnoteColumns = page.footnoteColumns ?? 1;
+    const fnAreaEl = renderFootnoteArea(
+      options.footnoteArea,
+      contentWidth,
+      context,
+      doc,
+      footnoteColumns
+    );
     fnAreaEl.style.position = 'absolute';
-    // Position at page bottom minus bottom margin (bottom of content area)
-    // The reserved height includes separator + all footnotes
+    // Position at page bottom minus bottom margin (bottom of content area).
+    // The reserved height includes the separator + the tallest footnote column
+    // (multi-column footnotes sit side by side, so the area is as tall as the
+    // tallest column, not the sum of every footnote).
     const reservedHeight = Math.max(
       page.footnoteReservedHeight ?? 0,
-      calculateFootnoteAreaRenderHeight(options.footnoteArea)
+      calculateFootnoteAreaRenderHeight(options.footnoteArea, footnoteColumns)
     );
     const contentAreaBottom = page.size.h - page.margins.bottom - page.margins.top;
     fnAreaEl.style.top = `${Math.max(-page.margins.top, contentAreaBottom - reservedHeight)}px`;
@@ -850,7 +859,16 @@ export function renderPage(
     const headerVisualTop = options.headerContent?.visualTop ?? 0;
     const headerVisualBottom =
       options.headerContent?.visualBottom ?? options.headerContent?.height ?? 0;
-    const actualHeaderHeight = Math.max(headerVisualBottom - headerVisualTop, 24);
+    // The interactive box height tracks the in-flow band (`flowHeight`), NOT the
+    // float-inclusive `visualBottom`. A page/margin-anchored shape (e.g. a
+    // full-page letterhead in a header) overflows the band visually but must not
+    // inflate the header element's box — otherwise it covers the body and
+    // swallows clicks meant for the document text (#856). Floating content still
+    // renders (overflow stays visible below) and is made non-interactive in
+    // normal mode via CSS so it never intercepts body clicks.
+    const headerFlowHeight =
+      options.headerContent?.flowHeight ?? options.headerContent?.height ?? 0;
+    const interactiveHeaderHeight = Math.max(headerFlowHeight - Math.min(0, headerVisualTop), 24);
     // If header content fits in the original space, clip overflow; otherwise
     // margins.top was already expanded so let content show fully.
     const headerOverflows = headerVisualBottom > availableHeaderHeight;
@@ -862,8 +880,8 @@ export function renderPage(
     headerEl.style.left = `${page.margins.left}px`;
     headerEl.style.right = `${page.margins.right}px`;
     headerEl.style.width = `${headerContentWidth}px`;
-    headerEl.style.height = `${actualHeaderHeight}px`;
-    headerEl.style.minHeight = `${actualHeaderHeight}px`;
+    headerEl.style.height = `${interactiveHeaderHeight}px`;
+    headerEl.style.minHeight = `${interactiveHeaderHeight}px`;
 
     let shouldClipHeader = !headerOverflows;
     if (options.headerContent && options.headerContent.blocks.length > 0) {
@@ -907,16 +925,24 @@ export function renderPage(
       options.footerContent?.visualBottom ?? options.footerContent?.height ?? 0;
     const actualFooterHeight = Math.max(footerVisualBottom - footerVisualTop, 24);
     const footerOverflows = actualFooterHeight > availableFooterHeight;
+    // Same as the header: the interactive box tracks the in-flow band, not a
+    // floating shape's extent, so a tall anchored footer object can't cover the
+    // body and swallow clicks (#856). The box stays bottom-anchored at the
+    // footer line; floating content overflows upward (visible) and is made
+    // non-interactive in normal mode via CSS.
+    const footerFlowHeight =
+      options.footerContent?.flowHeight ?? options.footerContent?.height ?? 0;
+    const interactiveFooterHeight = Math.max(footerFlowHeight - Math.min(0, footerVisualTop), 24);
 
     const footerEl = doc.createElement('div');
     footerEl.className = PAGE_CLASS_NAMES.footer;
     footerEl.style.position = 'absolute';
-    footerEl.style.top = `${page.size.h - footerDistance - actualFooterHeight}px`;
+    footerEl.style.top = `${page.size.h - footerDistance - interactiveFooterHeight}px`;
     footerEl.style.left = `${page.margins.left}px`;
     footerEl.style.right = `${page.margins.right}px`;
     footerEl.style.width = `${footerContentWidth}px`;
-    footerEl.style.height = `${actualFooterHeight}px`;
-    footerEl.style.minHeight = `${actualFooterHeight}px`;
+    footerEl.style.height = `${interactiveFooterHeight}px`;
+    footerEl.style.minHeight = `${interactiveFooterHeight}px`;
 
     let shouldClipFooter = !footerOverflows;
     if (options.footerContent && options.footerContent.blocks.length > 0) {
@@ -934,7 +960,11 @@ export function renderPage(
         options,
         layout
       );
-      footerContentEl.style.top = `${-footerVisualTop}px`;
+      // The box shrank from `actualFooterHeight` to `interactiveFooterHeight`
+      // with its bottom pinned, so its top moved down by the difference. Offset
+      // the content up by the same amount to keep it painted in place (a normal
+      // footer with no float has a zero delta, so this is a no-op there).
+      footerContentEl.style.top = `${-footerVisualTop - (actualFooterHeight - interactiveFooterHeight)}px`;
       if (footerContentEl.querySelector('img')) {
         shouldClipFooter = false;
       }

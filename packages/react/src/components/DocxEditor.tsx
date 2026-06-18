@@ -26,6 +26,7 @@ import { useFindReplaceBridge } from './DocxEditor/hooks/useFindReplaceBridge';
 import { useFormattingActions } from './DocxEditor/hooks/useFormattingActions';
 import { useImageActions } from './DocxEditor/hooks/useImageActions';
 import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
+import { useControllableBoolean } from './DocxEditor/hooks/useControllableBoolean';
 import { useTableDialogs } from './DocxEditor/hooks/useTableDialogs';
 import { useHeaderFooterEditing } from './DocxEditor/hooks/useHeaderFooterEditing';
 import { useDocumentLoader } from './DocxEditor/hooks/useDocumentLoader';
@@ -45,9 +46,10 @@ import { useResetEditorState } from './DocxEditor/hooks/useResetEditorState';
 import { DocxEditorShell } from './DocxEditor/DocxEditorShell';
 import type { FontOption } from './ui/FontPicker';
 import { OUTLINE_BUTTON_RESERVED_SPACE, OUTLINE_RESERVED_SPACE } from './DocumentOutline';
+import { RULER_WIDTH } from './ui/VerticalRuler';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useCommentSidebarItems';
-import { useTrackedChanges } from '../hooks/useTrackedChanges';
+import { extractTrackedChanges } from '../hooks/useTrackedChanges';
 import { type EditorState as PMEditorState } from 'prosemirror-state';
 import type { ReactSidebarItem } from '../plugin-api/types';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
@@ -60,7 +62,7 @@ import { type InlineHeaderFooterEditorRef } from './InlineHeaderFooterEditor';
 import { DocumentAgent } from '@eigenpal/docx-editor-core/agent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
 import { type DocxInput } from '@eigenpal/docx-editor-core/utils';
-import type { FontDefinition } from '@eigenpal/docx-editor-core/utils';
+import type { FontDefinition, ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 import { useFontLifecycle } from '../hooks/useFontLifecycle';
 import { useTableSelection } from '../hooks/useTableSelection';
 import { useDocumentHistory } from '../hooks/useHistory';
@@ -117,6 +119,12 @@ export interface DocxEditorProps {
   document?: Document | null;
   /** Callback when document is saved */
   onSave?: (buffer: ArrayBuffer) => void;
+  /**
+   * Callback when a DOCX file is selected through `File > Open` or Cmd/Ctrl+O.
+   * Pass it to route the picked file through your own import pipeline. Omit it
+   * to keep the built-in local document load behavior.
+   */
+  onOpen?: (file: File) => void | Promise<void>;
   /** Author name used for comments and track changes */
   author?: string;
   /** Callback when document changes */
@@ -147,6 +155,13 @@ export interface DocxEditorProps {
   theme?: Theme | null;
   /** Whether to show toolbar (default: true) */
   showToolbar?: boolean;
+  /**
+   * Whether to show `File > Open` and enable Cmd/Ctrl+O (default: true).
+   * Set false when you provide your own open action elsewhere.
+   */
+  showFileOpen?: boolean;
+  /** Whether to show the Help menu in the menu bar (default: true) */
+  showHelpMenu?: boolean;
   /** Whether to show zoom control (default: true) */
   showZoomControl?: boolean;
   /** Whether to show page margin guides/boundaries (default: false) */
@@ -262,6 +277,10 @@ export interface DocxEditorProps {
   comments?: Comment[];
   /** Fires whenever the comments array changes (controlled mode). */
   onCommentsChange?: (comments: Comment[]) => void;
+  /** Controlled comments-sidebar visibility; source of truth when set. Pair with `onCommentsSidebarOpenChange`; omit for the default self-managed behavior. */
+  commentsSidebarOpen?: boolean;
+  /** Fires with the next open state whenever the editor wants to show or hide the comments sidebar. Fires in both controlled and uncontrolled modes. */
+  onCommentsSidebarOpenChange?: (open: boolean) => void;
   /**
    * Callback when rendered DOM context is ready (for plugin overlays).
    * Used by PluginHost to get access to the rendered page DOM for positioning.
@@ -337,10 +356,11 @@ export interface DocxEditorRef {
   scrollToPage: (pageNumber: number) => void;
   /**
    * Scroll the paginated view to the paragraph with the given Word `w14:paraId`.
+   * Pass `options.highlight` to briefly flash it in a custom color.
    * @returns whether a matching paragraph exists in the ProseMirror document
-   * @example ref.current?.scrollToParaId('1A2B3C4D')
+   * @example ref.current?.scrollToParaId('1A2B3C4D', { highlight: { color: 'rgba(255, 235, 59, 0.55)' } })
    */
-  scrollToParaId: (paraId: string) => boolean;
+  scrollToParaId: (paraId: string, options?: ScrollToParaIdOptions) => boolean;
   /**
    * Scroll the paginated view to a specific ProseMirror document position.
    * Use this when you have a raw PM offset; for Word `w14:paraId` use
@@ -575,6 +595,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     documentBuffer,
     document: initialDocument,
     onSave,
+    onOpen,
     author = 'User',
     onChange,
     onSelectionChange,
@@ -583,6 +604,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     colorMode = 'light',
     theme,
     showToolbar = true,
+    showFileOpen = true,
+    showHelpMenu = true,
     showZoomControl = true,
     showMarginGuides: _showMarginGuides = false,
     marginGuideColor: _marginGuideColor,
@@ -614,6 +637,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onCommentReply,
     comments: commentsProp,
     onCommentsChange,
+    commentsSidebarOpen,
+    onCommentsSidebarOpenChange,
     externalPlugins,
     externalContent = false,
     onEditorViewReady,
@@ -661,8 +686,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const [hfEditPosition, setHfEditPosition] = useState<'header' | 'footer' | null>(null);
   const [hfEditIsFirstPage, setHfEditIsFirstPage] = useState(false);
 
-  // Comments sidebar state
-  const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
+  // Controlled by `commentsSidebarOpen` when provided, else editor-owned; the
+  // setter routes through `onCommentsSidebarOpenChange`. See useControllableBoolean.
+  const [showCommentsSidebar, setShowCommentsSidebar] = useControllableBoolean(
+    commentsSidebarOpen,
+    onCommentsSidebarOpenChange
+  );
   // Auto-open the sidebar the first time a comment / tracked change
   // appears so users see the card without manually toggling. Latches so
   // a subsequent close stays closed; reset on doc reload.
@@ -695,11 +724,37 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   });
 
   // Latest PM state — mirrored from the view on every doc-changing transaction.
-  // Drives `useTrackedChanges` so the sidebar derives its list directly from PM
-  // (the source of truth, including remote ySync updates) rather than a debounced
+  // Drives the tracked changes derivation so the sidebar derives its list directly
+  // from PM (the source of truth, including remote ySync updates) rather than a debounced
   // copy in React state.
   const [pmState, setPmState] = useState<PMEditorState | null>(null);
-  const { entries: trackedChanges, commentToRevision } = useTrackedChanges(pmState);
+  const [hfVersion, setHfVersion] = useState(0);
+
+  const { entries: trackedChanges, commentToRevision } = useMemo(() => {
+    const bodyResult = extractTrackedChanges(pmState);
+    const mergedEntries = [...bodyResult.entries];
+    const mergedCommentToRevision = new Map(bodyResult.commentToRevision);
+
+    const hfViews = pagedEditorRef.current?.getHfPmViews?.();
+    if (hfViews) {
+      for (const [rId, view] of hfViews.entries()) {
+        const hfResult = extractTrackedChanges(view.state);
+        for (const entry of hfResult.entries) {
+          (entry as any).hfRid = rId;
+          mergedEntries.push(entry);
+        }
+        for (const [commentId, revisionId] of hfResult.commentToRevision.entries()) {
+          mergedCommentToRevision.set(commentId, revisionId);
+        }
+      }
+    }
+
+    return {
+      entries: mergedEntries,
+      commentToRevision: mergedCommentToRevision,
+    };
+  }, [pmState, hfVersion]);
+
   const [anchorPositions, setAnchorPositions] =
     useState<Map<string, number>>(EMPTY_ANCHOR_POSITIONS);
   // No separate state needed — pluginRenderedDomContext comes from PluginHost
@@ -768,6 +823,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
   const editorContentRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [documentFonts, setDocumentFonts] = useState<FontOption[]>([]);
   const {
     showOutline,
     setShowOutline,
@@ -862,6 +918,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     resetForNewDocument,
     commentsLoadedRef,
     commentIdAllocator: commentIdAllocatorRef.current,
+    setDocumentFonts,
   });
 
   const {
@@ -881,6 +938,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     comments,
     documentName,
     onSave,
+    onOpen,
     onError,
     onPrint,
     onDocumentNameChange,
@@ -1007,6 +1065,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   useKeyboardShortcuts({
     pagedEditorRef,
     disableFindReplaceShortcuts,
+    showFileOpen,
+    onOpenDocument: handleOpenDocument,
     findReplace,
     hyperlinkDialog,
     tableSelection,
@@ -1353,12 +1413,58 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       if (view) rejectChange(from, to)(view.state, view.dispatch);
     },
     onAcceptChangeById: (revisionId) => {
-      const view = pagedEditorRef.current?.getView();
-      if (view) acceptChangeById(revisionId)(view.state, view.dispatch);
+      const hfViews = pagedEditorRef.current?.getHfPmViews?.();
+      let targetView = null;
+      if (hfViews) {
+        for (const view of hfViews.values()) {
+          const { entries } = extractTrackedChanges(view.state);
+          if (
+            entries.some(
+              (e) =>
+                e.revisionId === revisionId ||
+                e.insertionRevisionId === revisionId ||
+                e.coalescedRevisionIds?.includes(revisionId)
+            )
+          ) {
+            targetView = view;
+            break;
+          }
+        }
+      }
+      const view = targetView || pagedEditorRef.current?.getView();
+      if (view) {
+        acceptChangeById(revisionId)(view.state, view.dispatch);
+        if (targetView) {
+          setHfVersion((prev) => prev + 1);
+        }
+      }
     },
     onRejectChangeById: (revisionId) => {
-      const view = pagedEditorRef.current?.getView();
-      if (view) rejectChangeById(revisionId)(view.state, view.dispatch);
+      const hfViews = pagedEditorRef.current?.getHfPmViews?.();
+      let targetView = null;
+      if (hfViews) {
+        for (const view of hfViews.values()) {
+          const { entries } = extractTrackedChanges(view.state);
+          if (
+            entries.some(
+              (e) =>
+                e.revisionId === revisionId ||
+                e.insertionRevisionId === revisionId ||
+                e.coalescedRevisionIds?.includes(revisionId)
+            )
+          ) {
+            targetView = view;
+            break;
+          }
+        }
+      }
+      const view = targetView || pagedEditorRef.current?.getView();
+      if (view) {
+        rejectChangeById(revisionId)(view.state, view.dispatch);
+        if (targetView) {
+          setHfVersion((prev) => prev + 1);
+        }
+      }
     },
     onTrackedChangeReply: (revisionId, text) => {
       setComments((prev) => [
@@ -1418,15 +1524,35 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const sidebarOpen = allSidebarItems.length > 0;
   // Reserve 2× the left-edge allowance so the centered page clears whatever
   // outline UI is showing, without forcing a shift on wide viewports.
-  const outlineLeftAllowance = showOutline
-    ? OUTLINE_RESERVED_SPACE
-    : showOutlineButton
-      ? OUTLINE_BUTTON_RESERVED_SPACE
-      : 20;
-  const minLayoutWidth =
-    2 * outlineLeftAllowance + DEFAULT_PAGE_WIDTH + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
+  const outlineLeftAllowance =
+    (showOutline
+      ? OUTLINE_RESERVED_SPACE
+      : showOutlineButton
+        ? OUTLINE_BUTTON_RESERVED_SPACE
+        : 20) +
+    // The outline toggle/panel inset past the vertical ruler when it's shown,
+    // so the page must clear that extra width too.
+    (showRuler && (showOutline || showOutlineButton) ? RULER_WIDTH : 0);
+  // Reserve against the WIDEST page in the doc, not the portrait default: pages
+  // center via `alignItems:center`, so a landscape section (wider than
+  // DEFAULT_PAGE_WIDTH) gets a smaller side margin and, with the old default,
+  // slid left under the outline toggle/panel. Taking the max across all section
+  // widths also covers mixed-orientation docs.
+  const docBody = history.state?.package?.document;
+  const sectionPageWidths = [
+    docBody?.finalSectionProperties?.pageWidth,
+    ...(docBody?.sections?.map((s) => s.properties?.pageWidth) ?? []),
+  ].filter((w): w is number => typeof w === 'number' && w > 0);
+  const maxPageWidthPx = sectionPageWidths.length
+    ? Math.round(Math.max(...sectionPageWidths) / 15)
+    : DEFAULT_PAGE_WIDTH;
 
-  const sectionPropsPageWidth = history.state?.package?.document?.finalSectionProperties?.pageWidth;
+  const minLayoutWidth =
+    2 * outlineLeftAllowance + maxPageWidthPx + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
+
+  // pageWidthPx — the final section's width — positions the sidebar / comment
+  // margin markers against the page most content lives under.
+  const sectionPropsPageWidth = docBody?.finalSectionProperties?.pageWidth;
   const pageWidthPx = sectionPropsPageWidth
     ? Math.round(sectionPropsPageWidth / 15)
     : DEFAULT_PAGE_WIDTH;
@@ -1680,12 +1806,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             renderTitleBarRight={renderTitleBarRight}
             toolbarExtra={toolbarExtra}
             fontFamilies={fontFamilies}
+            documentFonts={documentFonts}
             zoom={state.zoom}
             showZoomControl={showZoomControl}
             onFormat={handleFormat}
             onUndo={undoActiveEditor}
             onRedo={redoActiveEditor}
             onPrint={handleDirectPrint}
+            showFileOpen={showFileOpen}
+            showHelpMenu={showHelpMenu}
             onOpen={handleOpenDocument}
             onSave={handleDownloadDocument}
             onZoomChange={handleZoomChange}
@@ -1730,6 +1859,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             getHfTargetElement={getHfTargetElement}
             zoom={state.zoom}
             readOnly={readOnly}
+            isSuggesting={editingMode === 'suggesting'}
+            author={author}
+            onHfTransaction={(_rId, _view, docChanged) => {
+              if (docChanged) {
+                setHfVersion((prev) => prev + 1);
+              }
+            }}
             extensionManager={extensionManager}
             externalPlugins={allExternalPlugins}
             onDocumentChange={handleDocumentChange}

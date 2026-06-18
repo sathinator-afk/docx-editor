@@ -37,6 +37,7 @@ import { sdtAttrsToProps } from './sdtAttrs';
 import { convertPMParagraph } from './fromProseDoc/paragraph';
 import { convertPMTable } from './fromProseDoc/tables';
 import { convertPMTextBox, convertPMTextBoxRun } from './fromProseDoc/textbox';
+import { collectNumberingFromPM } from './fromProseDoc/numbering';
 
 /**
  * Convert a ProseMirror document to our Document type
@@ -61,7 +62,7 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
           document: documentBody,
         },
       }
-    : { package: { document: documentBody } };
+    : { package: { document: documentBody, numbering: collectNumberingFromPM(pmDoc) } };
 
   // Sync the watermark doc attr → `HeaderFooter.watermark` so the serializer
   // and any model consumers see watermark applies/removes (incl. via undo).

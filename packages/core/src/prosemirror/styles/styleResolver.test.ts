@@ -58,7 +58,7 @@ describe('StyleResolver', () => {
   });
 
   describe('resolveParagraphStyle', () => {
-    test('returns docDefaults merged with built-in Normal when no styleId provided', () => {
+    test('respects docDefaults paragraph props when no Normal style and no styleId', () => {
       const docDefaults: DocDefaults = {
         pPr: { lineSpacing: 240, spaceAfter: 160 },
         rPr: { fontSize: 22 },
@@ -72,10 +72,54 @@ describe('StyleResolver', () => {
       const resolver = createStyleResolver(styleDefinitions);
       const result = resolver.resolveParagraphStyle(null);
 
-      // Built-in Normal style overrides docDefaults for lineSpacing (259) and spaceAfter (160)
-      expect(result.paragraphFormatting?.lineSpacing).toBe(259);
+      // docDefaults are authoritative (ECMA-376 §17.7.5): the absent Normal must
+      // not re-introduce the default template's 259/160, so the document's own
+      // lineSpacing (240) is preserved.
+      expect(result.paragraphFormatting?.lineSpacing).toBe(240);
       expect(result.paragraphFormatting?.spaceAfter).toBe(160);
       expect(result.runFormatting?.fontSize).toBe(22);
+    });
+
+    test('does NOT synthesize template Normal spacing when docDefaults present but Normal absent', () => {
+      // styles.xml with <w:docDefaults><w:rPrDefault>…</w:rPrDefault><w:pPrDefault/>
+      // and no Normal style. Style-less paragraphs (e.g. table cells) must get
+      // zero after-spacing / single line, matching Word — not the 8pt/1.08
+      // default-template Normal.
+      const styleDefinitions: StyleDefinitions = {
+        docDefaults: { rPr: { fontSize: 20 } },
+        styles: [],
+      };
+
+      const resolver = createStyleResolver(styleDefinitions);
+      const result = resolver.resolveParagraphStyle(null);
+
+      expect(result.paragraphFormatting?.spaceAfter).toBeUndefined();
+      expect(result.paragraphFormatting?.lineSpacing).toBeUndefined();
+    });
+
+    test('style-less paragraphs inherit a predefined Normal (empty-template-with-styles workflow)', () => {
+      // A "nice document with the text deleted" imported as a blank template:
+      // it defines its own Normal with custom spacing. Style-less paragraphs
+      // (incl. table cells, which carry no pStyle) must follow that Normal —
+      // not the default-template 259/160 — so the template's look is respected
+      // going forward.
+      const styleDefinitions: StyleDefinitions = {
+        docDefaults: { rPr: { fontSize: 20 } },
+        styles: [
+          {
+            styleId: 'Normal',
+            type: 'paragraph',
+            default: true,
+            pPr: { lineSpacing: 240, lineSpacingRule: 'auto', spaceAfter: 40 },
+          },
+        ],
+      };
+
+      const resolver = createStyleResolver(styleDefinitions);
+      const result = resolver.resolveParagraphStyle(null);
+
+      expect(result.paragraphFormatting?.lineSpacing).toBe(240); // template Normal, not 259
+      expect(result.paragraphFormatting?.spaceAfter).toBe(40); // template Normal, not 160
     });
 
     test('applies Normal style when no styleId and Normal exists', () => {

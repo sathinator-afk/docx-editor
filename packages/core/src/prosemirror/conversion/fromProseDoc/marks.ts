@@ -9,6 +9,7 @@
 import type { Mark } from 'prosemirror-model';
 import type { TextFormatting } from '../../../types/document';
 import type { TextColorAttrs, UnderlineAttrs, FontFamilyAttrs } from '../../schema/marks';
+import { getMarkSetKey, RUN_COALESCING_MARK_EXCLUSIONS } from '../markKeys';
 
 /**
  * Create a unique key for a link mark
@@ -21,13 +22,7 @@ export function getLinkKey(mark: Mark): string {
  * Create a unique key for a set of marks (excluding hyperlink)
  */
 export function getMarksKey(marks: readonly Mark[]): string {
-  const nonLinkMarks = marks.filter((m) => m.type.name !== 'hyperlink');
-  if (nonLinkMarks.length === 0) return '';
-
-  return nonLinkMarks
-    .map((m) => `${m.type.name}:${JSON.stringify(m.attrs)}`)
-    .sort()
-    .join('|');
+  return getMarkSetKey(marks, RUN_COALESCING_MARK_EXCLUSIONS);
 }
 
 /**
@@ -81,8 +76,13 @@ export function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         break;
 
       case 'fontSize':
-        formatting.fontSize = mark.attrs.size;
-        formatting.fontSizeCs = mark.attrs.size;
+        if (mark.attrs.size != null) {
+          formatting.fontSize = mark.attrs.size;
+        }
+        const sizeCs = mark.attrs.sizeCs ?? mark.attrs.size;
+        if (sizeCs != null) {
+          formatting.fontSizeCs = sizeCs;
+        }
         break;
 
       case 'fontFamily': {

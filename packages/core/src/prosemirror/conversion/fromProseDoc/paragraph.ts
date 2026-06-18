@@ -23,6 +23,7 @@ import type {
   TrackedChangeInfo,
 } from '../../../types/document';
 import type { ParagraphAttrs } from '../../schema/nodes';
+import { getMarkSetKey, RUN_BOUNDARY_MARK_EXCLUSIONS } from '../markKeys';
 import { getLinkKey, getMarksKey, marksToTextFormatting } from './marks';
 import { sdtAttrsToProps } from '../sdtAttrs';
 import {
@@ -43,7 +44,8 @@ import {
  */
 export function convertPMParagraph(node: PMNode): Paragraph {
   const attrs = node.attrs as ParagraphAttrs;
-  let content = insertCommentRanges(extractParagraphContent(node), node);
+  let content = restoreOriginalRunBoundaries(extractParagraphContent(node), node);
+  content = insertCommentRanges(content, node);
 
   // Emit BookmarkStart/End from bookmarks attr (for TOC anchors, cross-references)
   const bookmarks = attrs.bookmarks as Array<{ id: number; name: string }> | undefined;
@@ -107,6 +109,186 @@ export function convertPMParagraph(node: PMNode): Paragraph {
   return paragraph;
 }
 
+type OriginalRunBoundary = NonNullable<ParagraphAttrs['_originalRunBoundaries']>[number];
+
+function restoreOriginalRunBoundaries(
+  content: ParagraphContent[],
+  paragraph: PMNode
+): ParagraphContent[] {
+  const boundaries = (paragraph.attrs as ParagraphAttrs)._originalRunBoundaries;
+  if (!boundaries || boundaries.length === 0) return content;
+  if (!content.every((item): item is Run => item.type === 'run')) return content;
+
+  const runs = content;
+  if (!runs.every(isTextOnlyRun)) return content;
+
+  const currentText = runs.map(runText).join('');
+  const originalText = boundaries.map((boundary) => boundary.text).join('');
+  if (currentText !== originalText) return content;
+  if (!paragraphMatchesOriginalRunBoundaries(paragraph, boundaries)) return content;
+
+  return splitRunsByOriginalBoundaries(runs, boundaries) ?? content;
+}
+
+function isTextOnlyRun(run: Run): boolean {
+  return run.content.every((item) => item.type === 'text');
+}
+
+function runText(run: Run): string {
+  return run.content.map((item) => (item.type === 'text' ? item.text : '')).join('');
+}
+
+function paragraphMatchesOriginalRunBoundaries(
+  paragraph: PMNode,
+  boundaries: OriginalRunBoundary[]
+): boolean {
+  let boundaryIndex = 0;
+  let boundaryOffset = 0;
+  let matches = true;
+
+  paragraph.forEach((node) => {
+    if (!matches) return;
+    if (!node.isText) {
+      matches = false;
+      return;
+    }
+
+    const marksKey = getMarkSetKey(node.marks, RUN_BOUNDARY_MARK_EXCLUSIONS);
+    const nodeText = node.text ?? '';
+    let nodeOffset = 0;
+
+    while (nodeOffset < nodeText.length) {
+      while (boundaryIndex < boundaries.length && boundaries[boundaryIndex].text.length === 0) {
+        boundaryIndex++;
+      }
+
+      const boundary = boundaries[boundaryIndex];
+      if (!boundary || marksKey !== (boundary.marksKey ?? '')) {
+        matches = false;
+        return;
+      }
+
+      const boundaryRemaining = boundary.text.length - boundaryOffset;
+      const nodeRemaining = nodeText.length - nodeOffset;
+      const count = Math.min(boundaryRemaining, nodeRemaining);
+      const nodePart = nodeText.slice(nodeOffset, nodeOffset + count);
+      const boundaryPart = boundary.text.slice(boundaryOffset, boundaryOffset + count);
+      if (nodePart !== boundaryPart) {
+        matches = false;
+        return;
+      }
+
+      nodeOffset += count;
+      boundaryOffset += count;
+      if (boundaryOffset === boundary.text.length) {
+        boundaryIndex++;
+        boundaryOffset = 0;
+      }
+    }
+  });
+
+  if (!matches) return false;
+
+  while (boundaryIndex < boundaries.length && boundaries[boundaryIndex].text.length === 0) {
+    boundaryIndex++;
+  }
+
+  return boundaryIndex === boundaries.length && boundaryOffset === 0;
+}
+
+function splitRunsByOriginalBoundaries(
+  runs: Run[],
+  boundaries: OriginalRunBoundary[]
+): ParagraphContent[] | null {
+  const restored: Run[] = [];
+  const cursor = { runIndex: 0, runOffset: 0 };
+
+  for (const boundary of boundaries) {
+    if (boundary.text.length === 0) {
+      restored.push(createEmptyRunFromBoundary(boundary));
+      continue;
+    }
+
+    const run = takeTextRunSlice(runs, cursor, boundary.text.length);
+    if (!run) return null;
+    if (boundary.propertyChanges && boundary.propertyChanges.length > 0) {
+      run.propertyChanges = boundary.propertyChanges;
+    }
+    restored.push(run);
+  }
+
+  while (cursor.runIndex < runs.length) {
+    const remaining = runText(runs[cursor.runIndex]).length - cursor.runOffset;
+    if (remaining > 0) return null;
+    cursor.runIndex++;
+    cursor.runOffset = 0;
+  }
+
+  return restored;
+}
+
+function createEmptyRunFromBoundary(boundary: OriginalRunBoundary): Run {
+  const run: Run = { type: 'run', content: [] };
+  if (boundary.formatting && Object.keys(boundary.formatting).length > 0) {
+    run.formatting = boundary.formatting;
+  }
+  if (boundary.propertyChanges && boundary.propertyChanges.length > 0) {
+    run.propertyChanges = boundary.propertyChanges;
+  }
+  return run;
+}
+
+function takeTextRunSlice(
+  runs: Run[],
+  cursor: { runIndex: number; runOffset: number },
+  length: number
+): Run | null {
+  let remaining = length;
+  let text = '';
+  let formatting: Run['formatting'];
+  let formattingKey: string | undefined;
+
+  while (remaining > 0) {
+    const sourceRun = runs[cursor.runIndex];
+    if (!sourceRun) return null;
+
+    const sourceText = runText(sourceRun);
+    const available = sourceText.length - cursor.runOffset;
+    if (available <= 0) {
+      cursor.runIndex++;
+      cursor.runOffset = 0;
+      continue;
+    }
+
+    const sourceFormattingKey = JSON.stringify(sourceRun.formatting ?? null);
+    if (formattingKey == null) {
+      formatting = sourceRun.formatting;
+      formattingKey = sourceFormattingKey;
+    } else if (formattingKey !== sourceFormattingKey) {
+      return null;
+    }
+
+    const count = Math.min(remaining, available);
+    text += sourceText.slice(cursor.runOffset, cursor.runOffset + count);
+    cursor.runOffset += count;
+    remaining -= count;
+
+    if (cursor.runOffset === sourceText.length) {
+      cursor.runIndex++;
+      cursor.runOffset = 0;
+    }
+  }
+
+  const run: Run = {
+    type: 'run',
+    content: [{ type: 'text', text }],
+  };
+  if (formatting && Object.keys(formatting).length > 0) {
+    run.formatting = formatting;
+  }
+  return run;
+}
+
 /**
  * Scan paragraph PM node for comment marks and insert commentRangeStart/End
  * markers in the content array for round-trip serialization.
@@ -128,7 +310,7 @@ function insertCommentRanges(content: ParagraphContent[], paragraph: PMNode): Pa
   // and wrap with commentRangeStart/End
   const result: ParagraphContent[] = [];
   const openedComments = new Set<number>();
-  let nodeIndex = 0;
+  const cursor = { index: 0 };
 
   paragraph.forEach((node) => {
     const nodeCommentIds = new Set<number>();
@@ -160,13 +342,13 @@ function insertCommentRanges(content: ParagraphContent[], paragraph: PMNode): Pa
       }
     }
 
-    // Push the actual content item
-    if (nodeIndex < content.length) {
-      result.push(content[nodeIndex]);
-    }
-
-    nodeIndex++;
+    appendContentForNode(result, content, cursor, node);
   });
+
+  while (cursor.index < content.length) {
+    result.push(content[cursor.index]);
+    cursor.index++;
+  }
 
   // Close any remaining open comments
   for (const cid of openedComments) {
@@ -175,6 +357,82 @@ function insertCommentRanges(content: ParagraphContent[], paragraph: PMNode): Pa
   }
 
   return result;
+}
+
+function appendContentForNode(
+  result: ParagraphContent[],
+  content: ParagraphContent[],
+  cursor: { index: number },
+  node: PMNode
+): void {
+  if (!node.isText) {
+    appendNextContentItem(result, content, cursor);
+    return;
+  }
+
+  let remainingText = (node.text ?? '').length;
+  while (remainingText > 0 && cursor.index < content.length) {
+    const item = content[cursor.index];
+    result.push(item);
+    cursor.index++;
+    remainingText -= paragraphContentTextLength(item);
+  }
+}
+
+function appendNextContentItem(
+  result: ParagraphContent[],
+  content: ParagraphContent[],
+  cursor: { index: number }
+): void {
+  if (cursor.index >= content.length) return;
+  result.push(content[cursor.index]);
+  cursor.index++;
+}
+
+function paragraphContentTextLength(content: ParagraphContent): number {
+  switch (content.type) {
+    case 'run':
+      return runContentTextLength(content);
+    case 'hyperlink':
+      return paragraphContentItemsTextLength(content.children);
+    case 'simpleField':
+      return paragraphContentItemsTextLength(content.content);
+    case 'complexField':
+      return paragraphContentItemsTextLength(content.fieldResult);
+    case 'inlineSdt':
+      return paragraphContentItemsTextLength(content.content);
+    case 'insertion':
+    case 'deletion':
+    case 'moveFrom':
+    case 'moveTo':
+      return paragraphContentItemsTextLength(content.content);
+    case 'mathEquation':
+      return content.plainText?.length ?? 0;
+    default:
+      return 0;
+  }
+}
+
+function paragraphContentItemsTextLength(content: readonly ParagraphContent[]): number {
+  return content.reduce((sum, item) => sum + paragraphContentTextLength(item), 0);
+}
+
+function runContentTextLength(run: Run): number {
+  return run.content.reduce((sum, item) => {
+    switch (item.type) {
+      case 'text':
+      case 'instrText':
+        return sum + item.text.length;
+      case 'symbol':
+        return sum + item.char.length;
+      case 'tab':
+      case 'softHyphen':
+      case 'noBreakHyphen':
+        return sum + 1;
+      default:
+        return sum;
+    }
+  }, 0);
 }
 
 /**
@@ -252,6 +510,7 @@ function paragraphAttrsToFormatting(attrs: ParagraphAttrs): ParagraphFormatting 
     attrs.tabs ||
     attrs.outlineLevel != null ||
     attrs.contextualSpacing ||
+    attrs.pageBreakBefore ||
     attrs.bidi;
 
   if (!hasFormatting) {
@@ -275,6 +534,7 @@ function paragraphAttrsToFormatting(attrs: ParagraphAttrs): ParagraphFormatting 
     tabs: attrs.tabs || undefined,
     outlineLevel: attrs.outlineLevel ?? undefined,
     contextualSpacing: attrs.contextualSpacing || undefined,
+    pageBreakBefore: attrs.pageBreakBefore || undefined,
     bidi: attrs.bidi || undefined,
   };
 }

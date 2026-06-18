@@ -93,6 +93,16 @@ export function serializeHyperlink(hyperlink: Hyperlink): string {
     })
     .join('');
 
+  // A hyperlink that would emit no attributes navigates nowhere; an empty
+  // wrapper is meaningless and rejected by strict validators, so fall back to
+  // the bare runs (e.g. a stale rId was dropped at save time). An href without
+  // an rId is an editor-created link awaiting registration — keep it wrapped
+  // (it is assigned an rId before export). Any other attribute (tooltip,
+  // tgtFrame, docLocation, ...) is preserved.
+  if (attrs.length === 0 && !hyperlink.href) {
+    return childrenXml;
+  }
+
   const attrsStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
   return `<w:hyperlink${attrsStr}>${childrenXml}</w:hyperlink>`;
 }
@@ -152,8 +162,10 @@ export function serializeComplexField(field: ComplexField): string {
 
   // Extract formatting from the first result run to apply to structural runs
   // (begin/separate/end). OOXML consumers expect consistent formatting across
-  // all runs in a complex field.
-  const resultFormatting = field.fieldResult?.[0]?.formatting;
+  // all runs in a complex field. When there is no result run, fall back to the
+  // formatting captured from the field's structural runs at parse time so a
+  // PAGE field's w:rPr survives the round-trip.
+  const resultFormatting = field.fieldResult?.[0]?.formatting ?? field.formatting;
   const rPrXml = resultFormatting ? serializeTextFormatting(resultFormatting) : '';
 
   // Begin field character (never set dirty — dirty causes apps to recalculate

@@ -154,6 +154,12 @@ export interface ToolbarProps {
    * An empty array renders an empty (but enabled) dropdown.
    */
   fontFamilies?: ReadonlyArray<string | FontOption>;
+  /**
+   * Fonts the loaded document references that the browser can render (embedded
+   * faces + system-resolved). Rendered in a "Document fonts" group, deduped
+   * against `fontFamilies`. Managed by the editor, not a consumer prop.
+   */
+  documentFonts?: readonly FontOption[];
   /** Whether to show font size picker (default: true) */
   showFontSizePicker?: boolean;
   /** Whether to show text color picker (default: true) */
@@ -190,6 +196,8 @@ export interface ToolbarProps {
   onInsertTable?: (rows: number, columns: number) => void;
   /** Whether to show table insert button (default: true) */
   showTableInsert?: boolean;
+  /** Whether to show the Help menu in the menu bar (default: true) */
+  showHelpMenu?: boolean;
   /** Callback when user wants to insert an image */
   onInsertImage?: () => void;
   /** Callback when user wants to insert a page break */
@@ -305,15 +313,13 @@ export function ToolbarButton({
       variant="ghost"
       size="icon-sm"
       className={cn(
-        'text-muted-foreground hover:text-foreground hover:bg-muted',
-        active && 'bg-foreground text-white hover:bg-foreground hover:text-white',
-        // Dark mode: bg-foreground flips light, so use Word's accent-tinted
-        // toggle highlight (blue tint + blue icon) instead of a white slab.
-        active &&
-          'dark:bg-doc-primary-light dark:text-doc-primary dark:hover:bg-doc-primary-light dark:hover:text-doc-primary',
+        // Hover + active states live in editor.css (.ep-toolbar-toggle); see
+        // that rule for why they're not Tailwind utilities here.
+        'ep-toolbar-toggle text-muted-foreground',
         disabled && 'opacity-30 cursor-not-allowed',
         className
       )}
+      data-active={active ? 'true' : undefined}
       onMouseDown={handleMouseDown}
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
@@ -406,6 +412,7 @@ export function Toolbar(explicitProps: ToolbarProps) {
     children,
     showFontPicker = true,
     fontFamilies,
+    documentFonts,
     showFontSizePicker = true,
     showTextColorPicker = true,
     showHighlightColorPicker = true,
@@ -728,6 +735,7 @@ export function Toolbar(explicitProps: ToolbarProps) {
               value={currentFormatting.fontFamily || 'Arial'}
               onChange={handleFontFamilyChange}
               fonts={normalizedFonts}
+              documentFonts={documentFonts}
               disabled={disabled}
               width={60}
               placeholder="Arial"

@@ -31,9 +31,16 @@ export interface ResolvedParagraphStyle {
 }
 
 /**
- * Word's built-in Normal style defaults, used when the document
- * doesn't define its own Normal style. Per ECMA-376, Word applies
- * these defaults: 8pt (160 twips) after spacing, 1.08x line spacing.
+ * Word's default-template Normal style, used as a last-resort fallback for a
+ * bare document that ships neither a `Normal` style nor `w:docDefaults`. These
+ * are the values Word writes into a freshly created document's Normal: 8pt
+ * (160 twips) after spacing, 1.08x line spacing.
+ *
+ * It is NOT applied when the document provides `w:docDefaults`. Those defaults
+ * are the authoritative paragraph defaults per ECMA-376 §17.7.5; an empty
+ * `w:pPrDefault` means zero spacing / single line, and synthesizing this style
+ * over it wrongly inflates style-less paragraphs (e.g. table cells whose author
+ * relied on the empty default).
  */
 const BUILTIN_NORMAL_STYLE: Style = {
   styleId: 'Normal',
@@ -292,9 +299,12 @@ export class StyleResolver {
         return style;
       }
     }
-    // Fall back to "Normal" for paragraph styles
+    // Fall back to "Normal" for paragraph styles. Only synthesize the
+    // default-template Normal for a bare document with no docDefaults; when
+    // docDefaults exist they are the authoritative paragraph defaults and an
+    // absent Normal must not re-introduce the template's 8pt/1.08 spacing.
     if (type === 'paragraph') {
-      return this.stylesById.get('Normal') ?? BUILTIN_NORMAL_STYLE;
+      return this.stylesById.get('Normal') ?? (this.docDefaults ? undefined : BUILTIN_NORMAL_STYLE);
     }
     return undefined;
   }

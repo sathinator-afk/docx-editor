@@ -9,7 +9,7 @@
     <div
       v-if="isOpen"
       ref="menuRef"
-      class="ctx-menu"
+      :class="['ctx-menu', portalClass]"
       :style="menuStyle"
       @contextmenu.prevent
       @keydown="handleKeyDown"
@@ -34,6 +34,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
 import { useTranslation } from '../i18n';
+import { useDocxPortalClass } from '../composables/usePortalClass';
 
 export interface ContextMenuItem {
   id: string;
@@ -64,6 +65,8 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useTranslation();
+// Re-apply the editor's `.ep-root` token scope to this body-teleported menu.
+const portalClass = useDocxPortalClass();
 
 const menuRef = ref<HTMLElement | null>(null);
 
@@ -157,7 +160,10 @@ const visibleItems = computed<ContextMenuItem[]>(() => {
         label: t('table.splitCell'),
         action: 'splitCell',
         disabled: !props.canSplitCell,
-      }
+      },
+      { id: 'div5', label: '', action: '', divider: true },
+      { id: 'selectTable', label: t('table.selectTable'), action: 'selectTable' },
+      { id: 'deleteTable', label: t('table.deleteTable'), action: 'deleteTable' }
     );
   }
 

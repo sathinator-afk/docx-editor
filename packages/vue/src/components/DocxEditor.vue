@@ -13,12 +13,13 @@
     ]"
     :style="style"
   >
-
     <div class="docx-editor-vue__toolbar-shell">
       <DocxEditorMenuBar
         :show-menu-bar="showMenuBar"
         :document-name="documentName"
         :document-name-editable="documentNameEditable"
+        :show-file-open="showFileOpen"
+        :show-help-menu="showHelpMenu"
         :render-logo="renderLogo"
         :render-title-bar-right="renderTitleBarRight"
         @rename="handleDocumentNameChange"
@@ -48,6 +49,7 @@
         :image-context="imageToolbarContext"
         :theme="documentTheme"
         :font-families="fontFamilies"
+        :document-fonts="documentFonts"
         :document-styles="documentStyles"
         @insert-link="showHyperlink = true"
         @apply-style="handleApplyStyle"
@@ -105,34 +107,9 @@
 
     <div v-if="!isReady && !parseError" class="docx-editor-vue__loading">Loading...</div>
 
-
     <div ref="hiddenPmRef" class="docx-editor-vue__hidden-pm paged-editor__hidden-pm" />
 
-
     <div class="docx-editor-vue__editor-scroll" @mousedown="handleEditorScrollMouseDown">
-      <div
-        v-if="showRuler && currentSectionProps"
-        class="docx-editor-vue__ruler-row"
-        :style="rulerRowStyle"
-      >
-        <HorizontalRuler
-          :section-props="currentSectionProps"
-          :zoom="zoom"
-          :editable="!readOnly"
-          :indent-left="rulerIndents.indentLeft"
-          :indent-right="rulerIndents.indentRight"
-          :first-line-indent="rulerIndents.firstLineIndent"
-          :hanging-indent="rulerIndents.hangingIndent"
-          :tab-stops="rulerIndents.tabStops"
-          @left-margin-change="handleLeftMarginChange"
-          @right-margin-change="handleRightMarginChange"
-          @indent-left-change="handleIndentLeftChange"
-          @indent-right-change="handleIndentRightChange"
-          @first-line-indent-change="handleFirstLineIndentChange"
-          @tab-stop-remove="handleTabStopRemove"
-        />
-      </div>
-
       <div class="docx-editor-vue__editor-area">
         <div
           ref="pagesViewportRef"
@@ -144,20 +121,44 @@
           @contextmenu.prevent="handleContextMenu"
           @wheel="handleZoomWheel"
         >
-          <div v-if="showRuler && currentSectionProps" class="docx-editor-vue__vertical-ruler">
-            <VerticalRuler
-              :section-props="currentSectionProps"
-              :zoom="zoom"
-              :editable="!readOnly"
-              @top-margin-change="handleTopMarginChange"
-              @bottom-margin-change="handleBottomMarginChange"
+          <div
+            v-if="showRuler && currentSectionProps"
+            class="docx-editor-vue__ruler-row"
+            :style="rulerRowStyle"
+          >
+            <HorizontalRuler
+              :section-props="currentSectionProps" :zoom="zoom" :editable="!readOnly"
+              :indent-left="rulerIndents.indentLeft" :indent-right="rulerIndents.indentRight"
+              :first-line-indent="rulerIndents.firstLineIndent" :hanging-indent="rulerIndents.hangingIndent" :tab-stops="rulerIndents.tabStops"
+              @left-margin-change="handleLeftMarginChange" @right-margin-change="handleRightMarginChange"
+              @indent-left-change="handleIndentLeftChange" @indent-right-change="handleIndentRightChange"
+              @first-line-indent-change="handleFirstLineIndentChange" @tab-stop-remove="handleTabStopRemove"
             />
           </div>
+
           <div
-            ref="pagesRef"
-            class="docx-editor-vue__pages paged-editor__pages"
-            :style="pagesContainerStyle"
-          />
+            class="docx-editor-vue__editor-content-wrapper"
+            :style="{
+              position: 'relative',
+              display: 'flex',
+              flex: '1 0 auto',
+              flexDirection: 'column',
+              minHeight: '100%',
+              minWidth: minLayoutWidth + 'px',
+            }"
+          >
+            <div v-if="showRuler && currentSectionProps" class="docx-editor-vue__vertical-ruler">
+              <VerticalRuler
+                :section-props="currentSectionProps" :zoom="zoom" :editable="!readOnly"
+                @top-margin-change="handleTopMarginChange" @bottom-margin-change="handleBottomMarginChange"
+              />
+            </div>
+            <div
+              ref="pagesRef"
+              class="docx-editor-vue__pages paged-editor__pages"
+              :style="pagesContainerStyle"
+            />
+          </div>
 
           <ContentControlWidgets v-if="!readOnly" :container="pagesRef" :view="editorView" />
 
@@ -190,7 +191,6 @@
               zIndex: 9998,
             }"
           />
-
 
           <div
             v-if="hfEdit && hfCaretRect"
@@ -321,16 +321,12 @@
           />
         </div>
 
-        <button
+        <OutlineToggleButton
           v-if="!showOutline && showOutlineButton"
-          type="button"
-          class="docx-editor-vue__outline-toggle"
-          :title="'Show document outline'"
-          @click="handleToggleOutline"
-          @mousedown.stop
-        >
-          <MaterialSymbol name="format_list_bulleted" :size="20" />
-        </button>
+          :left-offset="showRuler ? 12 + 20 : 12"
+          :top-px="showRuler ? 24 + 30 : 24"
+          @toggle="handleToggleOutline"
+        />
 
         <PageIndicator
           v-if="scrollPageInfo.totalPages > 1"
@@ -342,6 +338,8 @@
         <DocumentOutline
           :is-open="showOutline"
           :headings="outlineHeadings"
+          :left-offset="showRuler ? 12 + 20 : 12"
+          :top-px="showRuler ? 24 + 30 : 24"
           @close="showOutline = false"
           @navigate="handleOutlineNavigate"
         />
@@ -398,6 +396,7 @@ import TableToolbar from './ui/TableToolbar.vue';
 import DecorationLayer from './DecorationLayer.vue';
 import ImageSelectionOverlay from './ImageSelectionOverlay.vue';
 import DocumentOutline from './DocumentOutline.vue';
+import OutlineToggleButton from './OutlineToggleButton.vue';
 import UnifiedSidebar from './UnifiedSidebar.vue';
 import CommentMarginMarkers from './CommentMarginMarkers.vue';
 import MaterialSymbol from './ui/MaterialSymbol.vue';
@@ -422,6 +421,7 @@ import { usePageSetupControls } from '../composables/usePageSetupControls';
 import { useWatermarkControls } from '../composables/useWatermarkControls';
 import { useOutlineSidebar } from '../composables/useOutlineSidebar';
 import { useKeyboardShortcuts } from '../composables/useKeyboardShortcuts';
+import { provideDocxPortalClass } from '../composables/usePortalClass';
 import { useCommentManagement } from '../composables/useCommentManagement';
 import { useHostCallbacks } from '../composables/useHostCallbacks';
 import { useCommentLifecycle } from '../composables/useCommentLifecycle';
@@ -432,6 +432,7 @@ import { useSelectionSync } from '../composables/useSelectionSync';
 import { useMenuActions } from '../composables/useMenuActions';
 import { useDocumentLifecycle } from '../composables/useDocumentLifecycle';
 import { useDocxEditorRefApi } from '../composables/useDocxEditorRefApi';
+import { useControllableBoolean } from '../composables/useControllableBoolean';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import type { HeadingInfo } from '@eigenpal/docx-editor-core/utils/headingCollector';
@@ -448,12 +449,17 @@ const props = withDefaults(defineProps<DocxEditorProps>(), {
   documentBuffer: null,
   document: null,
   showToolbar: true,
+  showFileOpen: true,
+  showHelpMenu: true,
   showMenuBar: true,
   showRuler: true,
   documentName: '',
   readOnly: false,
   author: 'User',
   mode: 'editing',
+  // Explicit `undefined` default opts out of Vue's absent-Boolean-prop cast to
+  // `false`; without it the sidebar reads as controlled-closed and never opens.
+  commentsSidebarOpen: undefined,
   i18n: undefined,
   theme: null,
   colorMode: 'light',
@@ -468,6 +474,7 @@ const props = withDefaults(defineProps<DocxEditorProps>(), {
   fontFamilies: undefined,
   watermarkPresets: undefined,
   onPrint: undefined,
+  onOpen: undefined,
   disableFindReplaceShortcuts: false,
   renderLogo: undefined,
   onDocumentNameChange: undefined,
@@ -483,6 +490,7 @@ const emit = defineEmits<{
   (e: 'rename', name: string): void;
   (e: 'menu-action', action: string): void;
   (e: 'mode-change', mode: EditorMode): void;
+  (e: 'comments-sidebar-open-change', open: boolean): void;
 }>();
 
 const isDark = useColorMode(() => props.colorMode);
@@ -495,7 +503,8 @@ const authorRef = computed(() => props.author);
 
 provideLocale(computed(() => props.i18n));
 const { t } = createTranslator(computed(() => props.i18n));
-
+// Share this `.ep-root`'s token scope + theme with <body>-teleported chrome.
+provideDocxPortalClass(isDark);
 
 const hiddenPmRef = ref<HTMLElement | null>(null);
 const pagesRef = ref<HTMLElement | null>(null);
@@ -511,7 +520,12 @@ const showImageProperties = ref(false);
 const showPageSetup = ref(false);
 const showOutline = ref(props.showOutline);
 const showKeyboardShortcuts = ref(false);
-const showSidebar = ref(false);
+// Controlled by `commentsSidebarOpen` when set, else editor-owned; writes route
+// through `onCommentsSidebarOpenChange`. Mirrors React's useControllableBoolean.
+const showSidebar = useControllableBoolean(
+  () => props.commentsSidebarOpen,
+  (open) => emit('comments-sidebar-open-change', open)
+);
 const isAddingComment = ref(false);
 const activeSidebarItem = ref<string | null>(null);
 // Tree-shaped + reassigned wholesale: shallowRef avoids deep-proxying the
@@ -540,6 +554,7 @@ const {
   editorView,
   isReady,
   parseError,
+  documentFonts,
   layout,
   loadBuffer,
   loadDocument: loadParsedDocument,
@@ -550,6 +565,7 @@ const {
   getCommands,
   reLayout,
   getHfPmView,
+  getHfPmViews,
   syncHfPMs,
   setHfTransactionListener,
   setDocument,
@@ -557,7 +573,9 @@ const {
   hiddenContainer: hiddenPmRef,
   pagesContainer: pagesRef,
   readOnly,
-  externalPlugins: props.externalPlugins, syncCoordinator, editorMode,
+  externalPlugins: props.externalPlugins,
+  syncCoordinator,
+  editorMode,
   author: authorRef,
   onChange: (doc) => {
     emit('change', doc);
@@ -654,10 +672,13 @@ function clearHfOverlay() {
   hfSelectionRects.value = [];
 }
 
-useFontLifecycle(() => props.fonts, (err) => {
-  emit('error', err);
-  props.onError?.(err);
-});
+useFontLifecycle(
+  () => props.fonts,
+  (err) => {
+    emit('error', err);
+    props.onError?.(err);
+  }
+);
 
 // Memoized so the template doesn't walk the headers/footers Maps every tick.
 const activeHfView = computed<EditorView | null>(() =>
@@ -665,7 +686,9 @@ const activeHfView = computed<EditorView | null>(() =>
 );
 
 // Interactive toolbar formatting targets the edited header/footer, else body (#749).
-const activeFormattingView = computed<EditorView | null>(() => activeHfView.value ?? editorView.value);
+const activeFormattingView = computed<EditorView | null>(
+  () => activeHfView.value ?? editorView.value
+);
 
 // Registered in onMounted because `hfEdit` is destructured later in this script setup (TDZ).
 onMounted(() => {
@@ -742,6 +765,20 @@ onMounted(() => {
   });
 });
 
+const OUTLINE_RESERVED_SPACE = 268;
+const OUTLINE_BUTTON_RESERVED_SPACE = 64;
+const RULER_WIDTH = 20;
+const DEFAULT_PAGE_WIDTH = 816;
+const minLayoutWidth = computed(() => {
+  void stateTick.value;
+  const outlineLeftAllowance = (showOutline.value ? OUTLINE_RESERVED_SPACE : props.showOutlineButton ? OUTLINE_BUTTON_RESERVED_SPACE : 20) + (props.showRuler && (showOutline.value || props.showOutlineButton) ? RULER_WIDTH : 0);
+  const doc = getDocument();
+  const docBody = doc?.package?.document;
+  const sectionPageWidths = [docBody?.finalSectionProperties?.pageWidth, ...(docBody?.sections?.map((s) => s.properties?.pageWidth) ?? [])].filter((w): w is number => typeof w === 'number' && w > 0);
+  const maxPageWidthPx = sectionPageWidths.length ? Math.round(Math.max(...sectionPageWidths) / 15) : DEFAULT_PAGE_WIDTH;
+  return 2 * outlineLeftAllowance + maxPageWidthPx + (showSidebar.value ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
+});
+
 // When the comments sidebar opens, shift the pages container (NOT the
 // scrolling viewport) left by SIDEBAR_DOCUMENT_SHIFT. Applied on the
 // inner `__pages` container so the viewport's scrollbar stays at the
@@ -750,17 +787,14 @@ const pagesContainerStyle = computed(() => {
   const parts: string[] = [];
   if (showSidebar.value) parts.push(`translateX(-${SIDEBAR_DOCUMENT_SHIFT}px)`);
   if (zoom.value !== 1) parts.push(`scale(${zoom.value})`);
-  return {
-    transform: parts.length > 0 ? parts.join(' ') : undefined,
-    transformOrigin: 'top center',
-    transition: 'transform 0.2s ease',
-  };
+  return { transform: parts.length > 0 ? parts.join(' ') : undefined, transformOrigin: 'top center', transition: 'transform 0.2s ease' };
 });
 
 const rulerRowStyle = computed(() => ({
   paddingLeft: '20px',
   paddingRight: 20 + (showSidebar.value ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0) + 'px',
   transition: 'padding 0.2s ease',
+  minWidth: minLayoutWidth.value + 'px',
 }));
 
 const pageWidthPx = computed(() => {
@@ -768,13 +802,7 @@ const pageWidthPx = computed(() => {
   return twipsToPixels(sp?.pageWidth ?? 12240) * zoom.value;
 });
 
-const resolvedCommentIds = computed(() => {
-  const out = new Set<number>();
-  for (const c of comments.value) {
-    if (c.parentId == null && c.done) out.add(c.id);
-  }
-  return out;
-});
+const resolvedCommentIds = computed(() => new Set(comments.value.filter(c => c.parentId == null && c.done).map(c => c.id)));
 
 const bookmarkOptions = computed(() => {
   void stateTick.value;
@@ -830,6 +858,7 @@ const {
   commentIdAllocator,
   author: authorRef,
   commentCallbacks,
+  getHfPmViews,
 });
 
 const {
@@ -844,6 +873,7 @@ const {
   save,
 } = useFileIO({
   loadBuffer,
+  onOpen: props.onOpen,
   loadParsedDocument,
   getDocument,
   saveBlob,
@@ -914,6 +944,8 @@ useKeyboardShortcuts({
   showHyperlink,
   handleZoomKeyDown,
   disableFindReplaceShortcuts: () => props.disableFindReplaceShortcuts,
+  showFileOpen: () => props.showFileOpen,
+  onOpenDocument: () => docxInputRef.value?.click(),
 });
 
 const {
@@ -925,8 +957,10 @@ const {
   handleCommentResolve,
   handleCommentUnresolve,
   handleCommentDelete,
-  handleAcceptChange, handleRejectChange,
-  handleAcceptChangeById, handleRejectChangeById,
+  handleAcceptChange,
+  handleRejectChange,
+  handleAcceptChangeById,
+  handleRejectChangeById,
   handleTrackedChangeReply,
 } = useCommentManagement({
   editorView,
@@ -942,6 +976,7 @@ const {
   commentIdAllocator,
   author: authorRef,
   commentCallbacks,
+  getHfPmViews,
 });
 
 // Composable order (TDZ-sensitive): useImageActions → usePagesPointer → useContextMenus → useSelectionSync → useDocxEditorRefApi.
@@ -953,10 +988,6 @@ const {
   handleImageTransform,
 } = useImageActions({ editorView, zoom, stateTick, getCommands });
 
-
-// Table resize handlers — port of React PagedEditor.tsx column/row/right-edge
-// resize. tryStartResize() runs from handlePagesMouseDown; install() wires
-// global mousemove/mouseup that drives the drag and commits the PM transaction.
 const tableResize = useTableResize();
 let tableResizeCleanup: (() => void) | null = null;
 
@@ -1074,17 +1105,11 @@ onBeforeUnmount(() => {
   tableResizeCleanup?.();
 });
 
-// =========================================================================
 // Selection & caret overlay — useSelectionSync owns the implementation.
-//
-// These wrappers MUST stay as hoisted `function` declarations. The
-// `useDocxEditor({ onSelectionUpdate })` call earlier in this script
-// closes over `updateSelectionOverlay` by name; if these were rewritten
-// as `const updateSelectionOverlay = ...`, the closure would TDZ-crash
-// because `useDocxEditor` runs before `useSelectionSync` here. Function
-// declarations are hoisted, so the closure resolves at call time
-// (after script-setup finishes and `selectionSync` exists).
-// =========================================================================
+// These wrappers MUST stay hoisted `function` declarations: `useDocxEditor`
+// (above) closes over `updateSelectionOverlay` by name and runs before
+// `useSelectionSync`, so a `const` form would TDZ-crash; hoisting resolves
+// it at call time, after `selectionSync` exists.
 
 function clearOverlay() {
   selectionSync.clearOverlay();

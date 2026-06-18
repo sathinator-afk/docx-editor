@@ -653,6 +653,24 @@
    INLINE HEADER/FOOTER EDITING — Dim body, separator bar, dotted borders
    ============================================================================ */
 
+/* Header/footer CONTENT is non-interactive in normal mode: a single click on a
+   header/footer is already a no-op (Word parity), and — crucially — a page- or
+   margin-anchored shape (e.g. a full-page letterhead in a header) overflows the
+   band and would otherwise sit on top of the body and swallow clicks meant for
+   the document text (#856). The band element itself keeps pointer events so it
+   stays the double-click-to-edit target; only its content is passed through. */
+.layout-page-header > *,
+.layout-page-footer > * {
+  pointer-events: none;
+}
+
+/* While editing a region, its content must be hittable again so clicks map to
+   header/footer caret positions. */
+.paged-editor--editing-header .layout-page-header > *,
+.paged-editor--editing-footer .layout-page-footer > * {
+  pointer-events: auto;
+}
+
 /* Dim body content when editing header/footer */
 .paged-editor--hf-editing .layout-page-content {
   opacity: 0.4;

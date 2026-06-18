@@ -159,6 +159,7 @@ export type {
   Theme,
   FontInfo,
   FontTable,
+  FontEmbed,
   RelationshipType,
   Relationship,
   RelationshipMap,

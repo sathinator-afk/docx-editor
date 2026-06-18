@@ -19,6 +19,7 @@ import type {
   TableRowFormatting,
   TableCellFormatting,
   SectionProperties,
+  RunPropertyChange,
 } from '../../types/document';
 import type { RevisionInfo } from '../../types/content/trackedChange';
 import type { FloatingTableProperties, TableLook } from '../../types';
@@ -142,6 +143,19 @@ export interface ParagraphAttrs {
   /** Original inline paragraph formatting from DOCX (pre-style-resolution).
    *  Used by fromProseDoc for lossless round-trip serialization. */
   _originalFormatting?: ParagraphFormatting;
+
+  /**
+   * Source run boundaries captured during DOCX → PM conversion. ProseMirror
+   * normalizes adjacent text nodes with identical marks, and empty runs have no
+   * PM representation, so fromProseDoc uses this metadata to restore no-op run
+   * segmentation when the paragraph's text/marks still match the source.
+   */
+  _originalRunBoundaries?: Array<{
+    text: string;
+    marksKey?: string;
+    formatting?: TextFormatting;
+    propertyChanges?: RunPropertyChange[];
+  }>;
 
   /** Full section properties for paragraphs that end a section.
    *  Used by layout engine for per-section column/page config and round-trip. */

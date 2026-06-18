@@ -97,6 +97,13 @@ export interface SectionProperties {
   separator?: boolean;
   /** Individual column definitions */
   columns?: Column[];
+  /**
+   * Number of columns the footnote area is laid out in (`w15:footnoteColumns`).
+   * Word's "Footnote layout → Columns" setting, independent of the body column
+   * count above. Undefined/1 means the footnote area follows the body (single
+   * column for a single-column section). See ECMA-376 + the w15 extension.
+   */
+  footnoteColumns?: number;
 
   // Section behavior
   /** Section start type */

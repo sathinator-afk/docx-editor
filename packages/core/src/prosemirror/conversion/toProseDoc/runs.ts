@@ -58,8 +58,15 @@ export function convertField(
     }
   }
 
+  // Fall back to the field's structural-run formatting (the run holding the
+  // fldChars) when no result run carried any — e.g. a PAGE field collapsed into
+  // a single run, where the w:rPr lives on the field run, not a result run.
+  // Without this the field renders at the default size/color.
+  const resolvedFieldFormatting =
+    fieldFormatting ?? (field.type === 'complexField' ? field.formatting : undefined);
+
   // Merge style formatting with field run formatting (inline takes precedence)
-  const mergedFormatting = mergeTextFormatting(styleFormatting, fieldFormatting);
+  const mergedFormatting = mergeTextFormatting(styleFormatting, resolvedFieldFormatting);
   const marks = textFormattingToMarks(mergedFormatting);
 
   return schema.node(

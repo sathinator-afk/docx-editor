@@ -25,8 +25,8 @@ import type {
 import type { StyleMap } from './styleParser';
 import { computeListRendering, type NumberingMap } from './numberingParser';
 import { findChild, getAttribute, type XmlElement } from './xmlParser';
+import { normalizeLongHexId } from '../utils/hexId';
 import { parseSectionProperties } from './sectionParser';
-import { consolidateParagraphContent } from './runConsolidator';
 
 import { parseParagraphProperties } from './paragraphParser/properties';
 import {
@@ -91,15 +91,17 @@ export function parseParagraph(
     content: [],
   };
 
-  // Get paragraph ID attributes (Word 2010+ uses these for collaboration)
+  // Get paragraph ID attributes (Word 2010+ uses these for collaboration).
+  // Foreign exporters sometimes emit malformed or out-of-range ids that Word
+  // and strict validators reject, so normalize them as they enter the model.
   const paraId = getAttribute(node, 'w14', 'paraId') ?? getAttribute(node, 'w', 'paraId');
   if (paraId) {
-    paragraph.paraId = paraId;
+    paragraph.paraId = normalizeLongHexId(paraId);
   }
 
   const textId = getAttribute(node, 'w14', 'textId') ?? getAttribute(node, 'w', 'textId');
   if (textId) {
-    paragraph.textId = textId;
+    paragraph.textId = normalizeLongHexId(textId);
   }
 
   // `<w:lastRenderedPageBreak/>` only makes sense in body flow; headers and
@@ -147,9 +149,10 @@ export function parseParagraph(
   // Parse paragraph contents (runs, hyperlinks, bookmarks, fields)
   const rawContent = parseParagraphContents(node, styles, theme, numbering, rels, media);
 
-  // Consolidate consecutive runs with identical formatting
-  // This reduces fragmentation (e.g., 252 tiny runs → a few larger runs)
-  paragraph.content = consolidateParagraphContent(rawContent);
+  // Keep source run boundaries intact. Run positions can anchor comments,
+  // tracked changes, and fidelity tooling, so parser-level consolidation would
+  // erase information before later round-trip stages have a chance to preserve it.
+  paragraph.content = rawContent;
 
   // Compute list rendering if this is a list item.
   // numPr can come from inline pPr or from the referenced paragraph style.

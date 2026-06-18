@@ -541,16 +541,22 @@ export function selectionToRects(
  * @param blocks - All flow blocks.
  * @param measures - All measurements.
  * @param pmPosition - The PM position.
+ * @param startPageIndex - Page index to begin the search from. Pages/fragments
+ *   are ordered by PM position, so callers resolving many positions in
+ *   ascending order (e.g. sidebar anchors) can pass the previously matched
+ *   page to turn a per-call O(pages) scan into an amortized O(1) advance.
+ *   Defaults to 0 (full scan). Must be ≤ the page containing `pmPosition`.
  * @returns Caret position, or null if not found.
  */
 export function getCaretPosition(
   layout: Layout,
   blocks: FlowBlock[],
   measures: Measure[],
-  pmPosition: number
+  pmPosition: number,
+  startPageIndex = 0
 ): CaretPosition | null {
   // Search through pages and fragments to find the position
-  for (let pageIndex = 0; pageIndex < layout.pages.length; pageIndex++) {
+  for (let pageIndex = Math.max(0, startPageIndex); pageIndex < layout.pages.length; pageIndex++) {
     const page = layout.pages[pageIndex];
     const pageTopY = getPageTop(layout, pageIndex);
 

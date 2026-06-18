@@ -43,7 +43,9 @@ export interface FontFamilyAttrs {
 // @public
 export interface FontSizeAttrs {
     // (undocumented)
-    size: number;
+    size?: number | null;
+    // (undocumented)
+    sizeCs?: number | null;
 }
 
 // @public
@@ -176,6 +178,12 @@ export interface ParagraphAttrs {
         ilvl?: number;
     };
     _originalFormatting?: ParagraphFormatting;
+    _originalRunBoundaries?: Array<{
+        text: string;
+        marksKey?: string;
+        formatting?: TextFormatting;
+        propertyChanges?: RunPropertyChange[];
+    }>;
     // (undocumented)
     outlineLevel?: number;
     // (undocumented)

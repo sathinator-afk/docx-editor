@@ -68,6 +68,7 @@ export function DocxEditorToolbar({
   renderTitleBarRight,
   toolbarExtra,
   fontFamilies,
+  documentFonts,
   zoom,
   showZoomControl,
   // Handlers
@@ -75,6 +76,8 @@ export function DocxEditorToolbar({
   onUndo,
   onRedo,
   onPrint,
+  showFileOpen,
+  showHelpMenu,
   onOpen,
   onSave,
   onZoomChange,
@@ -115,12 +118,15 @@ export function DocxEditorToolbar({
   renderTitleBarRight: (() => ReactNode) | undefined;
   toolbarExtra: ReactNode;
   fontFamilies: ReadonlyArray<string | FontOption> | undefined;
+  documentFonts?: readonly FontOption[];
   zoom: number;
   showZoomControl: boolean;
   onFormat: (action: FormattingAction) => void;
   onUndo: () => void;
   onRedo: () => void;
   onPrint: () => void;
+  showFileOpen: boolean;
+  showHelpMenu: boolean;
   onOpen: () => void;
   onSave: () => void | Promise<void>;
   onZoomChange: (zoom: number) => void;
@@ -159,8 +165,9 @@ export function DocxEditorToolbar({
         documentStyles={document?.package.styles?.styles}
         theme={document?.package.theme || theme}
         fontFamilies={fontFamilies}
+        documentFonts={documentFonts}
         onPrint={onPrint}
-        onOpen={onOpen}
+        onOpen={showFileOpen ? onOpen : undefined}
         onSave={onSave}
         showZoomControl={showZoomControl}
         zoom={zoom}
@@ -168,6 +175,7 @@ export function DocxEditorToolbar({
         onRefocusEditor={onRefocusEditor}
         onInsertTable={onInsertTable}
         showTableInsert={true}
+        showHelpMenu={showHelpMenu}
         onInsertImage={onInsertImage}
         onInsertPageBreak={onInsertPageBreak}
         onInsertSectionBreakNextPage={onInsertSectionBreakNextPage}

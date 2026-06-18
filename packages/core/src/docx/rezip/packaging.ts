@@ -18,6 +18,7 @@ import {
   serializeCommentsExtensible,
 } from '../serializer/commentSerializer';
 import { serializeFootnotes, serializeEndnotes } from '../serializer/noteSerializer';
+import { serializeNumberingXml } from '../serializer/numberingSerializer';
 import { RELATIONSHIP_TYPES } from '../relsParser';
 import { findMaxRId, readRelsOrStub, headerFooterFilename } from './parts';
 
@@ -38,6 +39,9 @@ export const COMMENTS_IDS_CONTENT_TYPE =
 
 export const COMMENTS_EXTENSIBLE_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtensible+xml';
+
+const NUMBERING_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml';
 
 /**
  * Ensure every header/footer in `doc.package.relationships` is wired up in
@@ -107,6 +111,64 @@ export async function ensureHeaderFooterParts(
     }
   }
   if (relsChanged) {
+    zip.file(relsPath, relsXml, {
+      compression: 'DEFLATE',
+      compressionOptions: { level: compressionLevel },
+    });
+  }
+}
+
+/**
+ * Ensure a `word/numbering.xml` part exists for documents that reference list
+ * `numId`s but carry no original numbering definitions to preserve (e.g. the
+ * empty-template `createDocx()` path). Without it Word can't resolve the
+ * `<w:numId>` references and silently drops every list marker.
+ *
+ * No-op when the package has no numbering definitions, or when it already ships
+ * a `numbering.xml` — real-template round-trips keep their original numbering
+ * untouched (it is copied through verbatim by the repacker).
+ */
+export async function ensureNumberingPart(
+  doc: Document,
+  zip: JSZip,
+  compressionLevel: number
+): Promise<void> {
+  const numbering = doc.package.numbering;
+  if (!numbering || (numbering.abstractNums.length === 0 && numbering.nums.length === 0)) {
+    return;
+  }
+  if (zip.file('word/numbering.xml')) return;
+
+  zip.file('word/numbering.xml', serializeNumberingXml(numbering), {
+    compression: 'DEFLATE',
+    compressionOptions: { level: compressionLevel },
+  });
+
+  // Register the content type.
+  const ctFile = zip.file('[Content_Types].xml');
+  if (ctFile) {
+    let ctXml = await ctFile.async('text');
+    if (!ctXml.includes('PartName="/word/numbering.xml"')) {
+      ctXml = ctXml.replace(
+        '</Types>',
+        `<Override PartName="/word/numbering.xml" ContentType="${NUMBERING_CONTENT_TYPE}"/></Types>`
+      );
+      zip.file('[Content_Types].xml', ctXml, {
+        compression: 'DEFLATE',
+        compressionOptions: { level: compressionLevel },
+      });
+    }
+  }
+
+  // Register the document → numbering relationship.
+  const relsPath = 'word/_rels/document.xml.rels';
+  let relsXml = await readRelsOrStub(zip, relsPath);
+  if (!relsXml.includes('Target="numbering.xml"')) {
+    const rId = `rId${findMaxRId(relsXml) + 1}`;
+    relsXml = relsXml.replace(
+      '</Relationships>',
+      `<Relationship Id="${rId}" Type="${RELATIONSHIP_TYPES.numbering}" Target="numbering.xml"/></Relationships>`
+    );
     zip.file(relsPath, relsXml, {
       compression: 'DEFLATE',
       compressionOptions: { level: compressionLevel },

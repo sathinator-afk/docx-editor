@@ -1,6 +1,6 @@
 {
   "name": "@eigenpal/docx-editor-i18n",
-  "version": "1.5.0",
+  "version": "1.8.1",
   "description": "Shared UI locale strings and types for the @eigenpal docx-editor adapters (React and Vue).",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -36,6 +36,11 @@
       "types": "./dist/hi.d.ts",
       "import": "./dist/hi.mjs",
       "require": "./dist/hi.js"
+    },
+    "./id": {
+      "types": "./dist/id.d.ts",
+      "import": "./dist/id.mjs",
+      "require": "./dist/id.js"
     },
     "./pl": {
       "types": "./dist/pl.d.ts",

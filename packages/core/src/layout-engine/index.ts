@@ -933,15 +933,31 @@ function handleSectionBreak(
       break;
     }
 
-    case 'continuous':
-      // ECMA-376 §17.6.22: keep current page geometry; defer new size/margins
-      // until the next natural page break. Columns apply immediately below.
-      paginator.updatePageLayout(
-        nextSectionConfig.pageSize,
-        nextSectionConfig.margins,
-        /* applyImmediately */ false
-      );
+    case 'continuous': {
+      // ECMA-376 §17.6.22: a `continuous` break normally keeps the current page
+      // geometry and defers the new size/margins to the next natural page break.
+      // BUT a continuous break that changes page size or orientation cannot
+      // share a physical sheet with the preceding section, so Word and
+      // LibreOffice promote it to a page break. Match that: if the next
+      // section's page size differs from the current page's, force the break.
+      const currentSize = paginator.getCurrentState().page.size;
+      const nextSize = nextSectionConfig.pageSize;
+      const pageSizeChanges =
+        nextSize != null &&
+        (Math.round(nextSize.w) !== Math.round(currentSize.w) ||
+          Math.round(nextSize.h) !== Math.round(currentSize.h));
+      if (pageSizeChanges) {
+        paginator.updatePageLayout(nextSectionConfig.pageSize, nextSectionConfig.margins);
+        paginator.forcePageBreak();
+      } else {
+        paginator.updatePageLayout(
+          nextSectionConfig.pageSize,
+          nextSectionConfig.margins,
+          /* applyImmediately */ false
+        );
+      }
       break;
+    }
   }
 
   // Update column layout for the next section

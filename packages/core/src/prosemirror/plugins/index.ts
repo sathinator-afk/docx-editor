@@ -27,6 +27,11 @@ export {
   documentStylesKey,
   createDocumentStylesPlugin,
   getDocumentStyleResolver,
+  documentContextKey,
+  createDocumentContextPlugin,
+  getDocumentTheme,
+  getDefaultTableStyleId,
 } from './documentStyles';
+export type { DocumentContext } from './documentStyles';
 export { makeRevisionInfo } from './revisionIds';
 export type { RevisionInfo } from '../../types/content/trackedChange';

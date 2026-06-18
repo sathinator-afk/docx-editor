@@ -125,7 +125,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Monospace",
-    "other": null
+    "other": null,
+    "documentFonts": null
   },
   "fontSize": {
     "decrease": "Zmniejsz rozmiar czcionki",
@@ -688,7 +689,8 @@
       "listTable4Accent3": "Tabela listowa 4 — akcent 3",
       "gridTable4Accent5": "Tabela z siatką 4 — akcent 5",
       "gridTable4Accent6": "Tabela z siatką 4 — akcent 6"
-    }
+    },
+    "selectTable": null
   },
   "tableAdvanced": {
     "verticalAlignment": "Wyrównanie pionowe",

@@ -217,11 +217,28 @@ export interface FontInfo {
     csb0?: string;
     csb1?: string;
   };
-  /** Embedded font data reference */
-  embedRegular?: string;
-  embedBold?: string;
-  embedItalic?: string;
-  embedBoldItalic?: string;
+  /** Embedded regular face (`w:embedRegular`) */
+  embedRegular?: FontEmbed;
+  /** Embedded bold face (`w:embedBold`) */
+  embedBold?: FontEmbed;
+  /** Embedded italic face (`w:embedItalic`) */
+  embedItalic?: FontEmbed;
+  /** Embedded bold-italic face (`w:embedBoldItalic`) */
+  embedBoldItalic?: FontEmbed;
+}
+
+/**
+ * A single embedded font face referenced from `fontTable.xml`. The font binary
+ * lives at the relationship target (an obfuscated `.odttf` under `word/fonts/`)
+ * and is descrambled with `fontKey`. See `utils/fontDeobfuscation.ts`.
+ */
+export interface FontEmbed {
+  /** Relationship ID (`r:id`) resolved via `word/_rels/fontTable.xml.rels`. */
+  relId: string;
+  /** Obfuscation key GUID (`w:fontKey`), e.g. `{XXXXXXXX-....}`. */
+  fontKey?: string;
+  /** Whether the embedded face is subsetted (`w:subsetted`). */
+  subsetted?: boolean;
 }
 
 /**

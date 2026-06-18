@@ -55,21 +55,57 @@ export function hasImageVisualAttrs(v: ImageVisualAttrs): boolean {
   );
 }
 
+/** True when an OOXML `srcRect` crop is present on any edge. */
+export function hasImageCrop(v: ImageVisualAttrs): boolean {
+  return Boolean(v.cropTop || v.cropRight || v.cropBottom || v.cropLeft);
+}
+
 /**
- * Apply crop and opacity to an `<img>` element. Caller should gate with
- * `hasImageVisualAttrs(v)` to avoid the function call for plain images.
+ * Apply Word's per-image visual attributes (opacity AND `srcRect` crop) to an
+ * `<img>`. Single entry point on purpose: an earlier split into separate
+ * opacity/crop helpers let callers apply one and silently drop the other
+ * (floating images lost their crop). Callers just gate with
+ * {@link hasImageVisualAttrs} and call this. The img must already be sized to
+ * its display box.
  */
 export function applyImageVisualAttrs(img: HTMLImageElement, v: ImageVisualAttrs): void {
+  if (v.opacity != null && v.opacity < 1) {
+    img.style.opacity = String(Math.max(0, v.opacity));
+  }
+  applyImageCrop(img, v);
+}
+
+/**
+ * Render an OOXML `srcRect` crop on the `<img>` itself, keeping its element box
+ * at the display size so selection/resize overlays (which measure the `<img>`'s
+ * bounding rect) keep working.
+ *
+ * `srcRect` trims fractions off each edge of the SOURCE; the remaining region is
+ * displayed at the box size. `object-fit: cover` scales the source uniformly (no
+ * distortion) to cover that box and crops the overflow; `object-position` picks
+ * the kept region — `left / (left + right)` of the horizontal overflow goes off
+ * the left edge, likewise top/bottom. Plain "size the img to the box" stretched
+ * the whole source in (squashed); cover preserves the source's proportions.
+ *
+ * Limitation: this is exact only when the display-box aspect matches the cropped
+ * region's aspect — which holds for the normal "crop only" case (`wp:extent` is
+ * the cropped display size). When the frame was resized to a different aspect
+ * after cropping, Word stretches the region non-uniformly; cover instead keeps
+ * the aspect and clips, so the framing can differ. A faithful non-uniform crop
+ * needs a scaled inner img in an overflow-hidden wrapper, but that detaches the
+ * img's box from the display size and breaks selection/resize — so cover is the
+ * deliberate tradeoff.
+ */
+export function applyImageCrop(img: HTMLImageElement, v: ImageVisualAttrs): void {
   const top = v.cropTop ?? 0;
   const right = v.cropRight ?? 0;
   const bottom = v.cropBottom ?? 0;
   const left = v.cropLeft ?? 0;
-  if (top || right || bottom || left) {
-    img.style.clipPath = `inset(${top * 100}% ${right * 100}% ${bottom * 100}% ${left * 100}%)`;
-  }
-  if (v.opacity != null && v.opacity < 1) {
-    img.style.opacity = String(Math.max(0, v.opacity));
-  }
+  if (!(top || right || bottom || left)) return;
+  const posX = left + right > 0 ? (left / (left + right)) * 100 : 50;
+  const posY = top + bottom > 0 ? (top / (top + bottom)) * 100 : 50;
+  img.style.objectFit = 'cover';
+  img.style.objectPosition = `${posX}% ${posY}%`;
 }
 
 /**

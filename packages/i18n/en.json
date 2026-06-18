@@ -125,7 +125,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Monospace",
-    "other": "Other"
+    "other": "Other",
+    "documentFonts": "Document fonts"
   },
   "fontSize": {
     "decrease": "Decrease font size",
@@ -667,6 +668,7 @@
     "deleteRow": "Delete row",
     "deleteColumn": "Delete column",
     "deleteTable": "Delete table",
+    "selectTable": "Select entire table",
     "mergeCells": "Merge cells",
     "splitCell": "Split cell",
     "editingTools": "Table editing tools",

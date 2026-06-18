@@ -155,7 +155,7 @@ export function buildSelectionContext(doc: Document_2, range: Range_2, options?:
 // @public
 export function calculateFootnoteReservedHeights(pageFootnoteMap: Map<number, number[]>, footnoteContentMap: Map<number, {
     height: number;
-}>): Map<number, number>;
+}>, columns?: number): Map<number, number>;
 
 // @public
 export function canRenderFont(fontFamily: string, fallbackFont?: string): boolean;
@@ -206,10 +206,7 @@ export interface ClipboardSelection {
 }
 
 // @public
-export function collectFootnoteRefs(blocks: FlowBlock[]): Array<{
-    footnoteId: number;
-    pmPos: number;
-}>;
+export function collectFootnoteRefs(blocks: FlowBlock[]): FootnoteRefLocation[];
 
 // @public
 export function colorsEqual(color1: ColorValue | undefined | null, color2: ColorValue | undefined | null, theme: Theme | null | undefined): boolean;
@@ -654,6 +651,14 @@ export type FootnoteContent = {
 };
 
 // @public
+export type FootnoteRefLocation = {
+    footnoteId: number;
+    pmPos: number;
+    tableBlockId?: BlockId;
+    rowIndex?: number;
+};
+
+// @public
 export function footnoteReservedHeightsEqual(a: Map<number, number>, b: Map<number, number>): boolean;
 
 // @public
@@ -988,6 +993,7 @@ export function loadFont(fontFamily: string, options?: {
 // @public
 export function loadFontFromBuffer(fontFamily: string, buffer: ArrayBuffer, options?: {
     weight?: number | string;
+    style?: 'normal' | 'italic';
 }): Promise<boolean>;
 
 // @public
@@ -997,10 +1003,7 @@ export function loadFonts(families: string[], options?: {
 }): Promise<void>;
 
 // @public
-export function mapFootnotesToPages(pages: Page[], footnoteRefs: Array<{
-    footnoteId: number;
-    pmPos: number;
-}>): Map<number, number[]>;
+export function mapFootnotesToPages(pages: Page[], footnoteRefs: FootnoteRefLocation[]): Map<number, number[]>;
 
 // @public
 export const MAX_FOOTNOTE_LAYOUT_PASSES = 6;
@@ -1082,6 +1085,7 @@ export type Page = {
     };
     footnoteIds?: number[];
     footnoteReservedHeight?: number;
+    footnoteColumns?: number;
     columns?: ColumnLayout;
 };
 
@@ -1436,6 +1440,7 @@ export interface SectionProperties {
     evenAndOddHeaders?: boolean;
     footerDistance?: number;
     footerReferences?: FooterReference[];
+    footnoteColumns?: number;
     footnotePr?: FootnoteProperties;
     gutter?: number;
     headerDistance?: number;
@@ -1551,13 +1556,11 @@ export function stabilizeFootnoteLayout(args: StabilizeFootnoteLayoutArgs): Stab
 export interface StabilizeFootnoteLayoutArgs {
     // (undocumented)
     blocks: FlowBlock[];
+    footnoteColumns?: number;
     // (undocumented)
     footnoteContentMap: Map<number, FootnoteContent>;
     // (undocumented)
-    footnoteRefs: Array<{
-        footnoteId: number;
-        pmPos: number;
-    }>;
+    footnoteRefs: FootnoteRefLocation[];
     initialLayout: Layout;
     // (undocumented)
     layoutOpts: LayoutOptions;

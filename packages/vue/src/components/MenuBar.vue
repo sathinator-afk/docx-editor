@@ -35,7 +35,7 @@
         </div>
       </template>
     </MenuDropdown>
-    <MenuDropdown :label="t('toolbar.help')" :items="helpItems" />
+    <MenuDropdown v-if="showHelpMenu" :label="t('toolbar.help')" :items="helpItems" />
   </div>
 </template>
 
@@ -45,6 +45,11 @@ import { useTranslation } from '../i18n';
 import MenuDropdown, { type MenuEntry } from './ui/MenuDropdown.vue';
 import TableGridInline from './ui/TableGridInline.vue';
 import MaterialSymbol from './ui/MaterialSymbol.vue';
+
+const props = withDefaults(defineProps<{ showFileOpen?: boolean; showHelpMenu?: boolean }>(), {
+  showFileOpen: true,
+  showHelpMenu: true,
+});
 
 const emit = defineEmits<{
   (e: 'action', action: string): void;
@@ -58,12 +63,16 @@ function act(action: string) {
 }
 
 const fileItems = computed<MenuEntry[]>(() => [
-  {
-    icon: 'file_upload',
-    label: t('toolbar.open'),
-    shortcut: t('toolbar.openShortcut'),
-    onClick: act('open'),
-  },
+  ...(props.showFileOpen
+    ? [
+        {
+          icon: 'file_upload',
+          label: t('toolbar.open'),
+          shortcut: t('toolbar.openShortcut'),
+          onClick: act('open'),
+        } as MenuEntry,
+      ]
+    : []),
   {
     icon: 'file_download',
     label: t('toolbar.save'),

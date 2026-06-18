@@ -124,6 +124,22 @@ function alignToJustifyContent(align: string | undefined): string {
 }
 
 /**
+ * Horizontal alignment for an image alone on a line. An anchored image
+ * (`wp:positionH`, i.e. `position.horizontal` present) is positioned by its OWN
+ * alignment, independent of the paragraph's `jc` — defaulting to left like Word,
+ * NOT the paragraph alignment (which would wrongly center a left-anchored header
+ * logo whose paragraph happens to be centered). An inline image with no anchor
+ * follows the paragraph alignment. (issue #777)
+ */
+export function resolveImageLineAlign(
+  imageRun: ImageRun,
+  paragraphAlignment: 'left' | 'center' | 'right' | 'justify' | undefined
+): string | undefined {
+  const horizontal = imageRun.position?.horizontal;
+  return horizontal ? (horizontal.align ?? 'left') : paragraphAlignment;
+}
+
+/**
  * Build a stable key for an inline image run.
  * PM positions are preferred because they uniquely identify the source node.
  */
@@ -307,8 +323,7 @@ export function renderLine(
   // anchored layout.
   if (runsForLine.length === 1 && isImageRun(runsForLine[0])) {
     const imageRun = runsForLine[0] as ImageRun;
-    const imageAlign = imageRun.position?.horizontal?.align;
-    const effectiveAlign = imageAlign ?? alignment;
+    const effectiveAlign = resolveImageLineAlign(imageRun, alignment);
     lineEl.style.display = 'flex';
     lineEl.style.alignItems = 'center';
     lineEl.style.justifyContent = alignToJustifyContent(effectiveAlign);

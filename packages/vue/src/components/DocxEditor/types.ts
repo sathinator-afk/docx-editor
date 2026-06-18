@@ -14,6 +14,7 @@ import type { Document, Theme } from '@eigenpal/docx-editor-core/types/document'
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import type { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
+import type { ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 import type { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
 import type { FontDefinition } from '@eigenpal/docx-editor-core/utils';
 import type { StyleValue, VNodeChild } from 'vue';
@@ -34,6 +35,13 @@ export interface DocxEditorProps {
   document?: Document | null;
   /** Whether to show the main formatting toolbar. */
   showToolbar?: boolean;
+  /**
+   * Whether to show `File > Open` and enable Cmd/Ctrl+O (default: true).
+   * Set false when you provide your own open action elsewhere.
+   */
+  showFileOpen?: boolean;
+  /** Whether to show the Help menu in the menu bar (default: true). */
+  showHelpMenu?: boolean;
   /** Whether to show the title/menu bar. Vue-only chrome toggle. */
   showMenuBar?: boolean;
   /** Whether to show page rulers. */
@@ -48,6 +56,10 @@ export interface DocxEditorProps {
   mode?: EditorMode;
   /** Callback when the editing mode changes. */
   onModeChange?: (mode: EditorMode) => void;
+  /** Controlled comments-sidebar visibility; source of truth when set. Pair with `onCommentsSidebarOpenChange`; omit for the default self-managed behavior. */
+  commentsSidebarOpen?: boolean;
+  /** Fires with the next open state whenever the editor wants to show or hide the comments sidebar. Fires in both controlled and uncontrolled modes. */
+  onCommentsSidebarOpenChange?: (open: boolean) => void;
   /** Translation overrides merged with English fallback. */
   i18n?: Translations;
   /** Theme override used for toolbar color palettes when the document has no theme. */
@@ -91,6 +103,12 @@ export interface DocxEditorProps {
    * also invokes this callback.
    */
   onPrint?: () => void;
+  /**
+   * Callback when a DOCX file is selected through `File > Open` or Cmd/Ctrl+O.
+   * Pass it to route the picked file through your own import pipeline. Omit it
+   * to keep the built-in local document load behavior.
+   */
+  onOpen?: (file: File) => void | Promise<void>;
   /** Disable Cmd/Ctrl+F and Cmd/Ctrl+H interception. */
   disableFindReplaceShortcuts?: boolean;
   /** Custom logo/icon renderer for the title bar. Slots remain preferred in templates. */
@@ -137,6 +155,8 @@ export type DocxEditorRef = EditorRefLike & {
   getZoom(): number;
   /** Focus the editor's hidden ProseMirror view. Vue-only — not in EditorRefLike. */
   focus(): void;
+  /** Scroll to a body paragraph by Word `w14:paraId`, optionally flashing it. */
+  scrollToParaId(paraId: string, options?: ScrollToParaIdOptions): boolean;
   /** Scroll the visible pages to a 1-indexed page number. */
   scrollToPage(pageNumber: number): void;
   /** Scroll to a raw ProseMirror document position. */

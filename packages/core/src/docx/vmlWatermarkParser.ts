@@ -28,7 +28,7 @@ import type { Watermark, RelationshipMap, MediaFile } from '../types/document';
 import { findAllDeep, getChildElements, getAttribute, type XmlElement } from './xmlParser';
 
 /** Parse a VML/CSS `style` attribute ("k:v;k:v") into a lookup. */
-function parseStyleAttr(style: string | null): Record<string, string> {
+export function parseStyleAttr(style: string | null): Record<string, string> {
   const out: Record<string, string> = {};
   if (!style) return out;
   for (const decl of style.split(';')) {
@@ -110,11 +110,26 @@ function resolveWatermarkImage(
 }
 
 /** Is this VML shape a Word watermark (vs. an ordinary inline VML shape)? */
-function isWatermarkShape(shape: XmlElement, idLower: string): boolean {
+export function isWatermarkShape(shape: XmlElement, idLower: string): boolean {
   if (idLower.includes('watermark')) return true;
   // Text watermarks use the WordArt preset t136.
   const type = getAttribute(shape, null, 'type') ?? '';
   if (type.includes('_t136')) return true;
+  // Picture watermarks wash the image out via `v:imagedata` gain/blacklevel — a
+  // fingerprint an ordinary inline logo never carries. Catch these even when the
+  // shape id doesn't contain "watermark" (e.g. non-Word generators), so they
+  // aren't mis-rendered as a full-opacity inline picture (#777 follow-up).
+  const imagedata = getChildElements(shape).find(
+    (c) => c.name === 'v:imagedata' || c.name?.endsWith(':imagedata')
+  );
+  if (
+    imagedata &&
+    (getAttribute(imagedata, null, 'gain') ||
+      getAttribute(imagedata, 'o', 'gain') ||
+      getAttribute(imagedata, null, 'blacklevel'))
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -142,7 +157,12 @@ export function extractWatermark(
       (c) => c.name === 'v:imagedata' || c.name?.endsWith(':imagedata')
     );
 
-    if (!isWatermarkShape(shape, idLower) && !textpath && !imagedata) continue;
+    // Only genuine watermark shapes (or any text-path WordArt, which Word only
+    // uses for watermarks) are claimed here. An ordinary VML picture — e.g. a
+    // header logo — has `imagedata` but is NOT a watermark; leave it for the
+    // run parser to render as an inline image (issue #777). Previously any
+    // `imagedata` shape was greedily treated as a picture watermark.
+    if (!isWatermarkShape(shape, idLower) && !textpath) continue;
 
     const shapeStyle = parseStyleAttr(getAttribute(shape, null, 'style'));
     const rotation = parseFloat(shapeStyle['rotation'] ?? '0') || 0;

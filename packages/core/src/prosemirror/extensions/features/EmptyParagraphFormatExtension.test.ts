@@ -105,4 +105,22 @@ describe('applyPostSplitInheritance — next style', () => {
 
     expect(tr.doc.child(1).attrs.styleId).toBe('Heading1');
   });
+
+  test('Enter carries a distinct complex-script font size onto the new paragraph', () => {
+    // No resolver, so the next-style early-return is skipped and the
+    // mark-inheritance loop runs — the same loop the body-text Enter case
+    // (no w:next style) hits in production.
+    const { tr, sourcePara } = splitAtEndOfHeading();
+    // A run with different Latin (size) and complex-script (sizeCs) sizes.
+    const fontSizeMark = schema.marks.fontSize.create({ size: 28, sizeCs: 36 });
+    applyPostSplitInheritance(tr, sourcePara, [fontSizeMark], schema);
+
+    const dtf = tr.doc.child(1).attrs.defaultTextFormatting as {
+      fontSize?: number;
+      fontSizeCs?: number;
+    };
+    expect(dtf.fontSize).toBe(28);
+    // Without carrying fontSizeCs, the next write would re-align sizeCs to 28.
+    expect(dtf.fontSizeCs).toBe(36);
+  });
 });

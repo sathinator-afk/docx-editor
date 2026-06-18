@@ -34,7 +34,15 @@ import {
 import { EditorState } from 'prosemirror-state';
 import type { EditorState as EditorStateT } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
-import { schema, createDocumentStylesPlugin } from '@eigenpal/docx-editor-core/prosemirror';
+import {
+  schema,
+  createDocumentStylesPlugin,
+  createDocumentContextPlugin,
+} from '@eigenpal/docx-editor-core/prosemirror';
+import {
+  createSuggestionModePlugin,
+  setSuggestionMode,
+} from '@eigenpal/docx-editor-core/prosemirror/plugins';
 import {
   headerFooterToProseDoc,
   proseDocToBlocks,
@@ -65,6 +73,8 @@ export interface HiddenHeaderFooterPMsRef {
    * before mount or when the rId is not present in the loaded document.
    */
   getView(rId: string): EditorView | null;
+  /** Get all active EditorViews mapped by rId. */
+  getViews(): Map<string, EditorView>;
 }
 
 export interface HiddenHeaderFooterPMsProps {
@@ -74,6 +84,10 @@ export interface HiddenHeaderFooterPMsProps {
   styles?: StyleDefinitions | null;
   /** Document theme, threaded for themed cell shading on initial PM build. */
   theme?: Theme | null;
+  /** Suggestion mode active state */
+  isSuggesting?: boolean;
+  /** Active author for suggestion mode */
+  author?: string;
   /** `defaultTabStop` from `state.doc.attrs.defaultTabStopTwips`, threaded to the HF PM doc. */
   defaultTabStopTwips?: number | null;
   /**
@@ -102,7 +116,10 @@ function buildInitialState(
   styles: StyleDefinitions | null | undefined,
   theme: Theme | null | undefined,
   defaultTabStopTwips: number | null | undefined,
-  mgr: ExtensionManager
+  defaultTableStyleId: string | null | undefined,
+  mgr: ExtensionManager,
+  isSuggesting: boolean,
+  author: string
 ): EditorState {
   const pmDoc = headerFooterToProseDoc(hf.content, {
     styles: styles ?? undefined,
@@ -112,10 +129,17 @@ function buildInitialState(
   // Header/footer paragraphs share the document's style table, so they get the
   // same style-aware behavior (e.g. Enter after a heading → body text).
   const styleResolverPlugin = createDocumentStylesPlugin(styles);
+  // Document context (theme + settings `w:defaultTableStyle`) so inserting a
+  // table in a header/footer adopts the default table style too.
+  const documentContextPlugin = createDocumentContextPlugin({
+    theme: theme ?? null,
+    defaultTableStyleId: defaultTableStyleId ?? null,
+  });
+  const suggestionPlugin = createSuggestionModePlugin(isSuggesting, author);
   return EditorState.create({
     doc: pmDoc,
     schema,
-    plugins: [...mgr.getPlugins(), styleResolverPlugin],
+    plugins: [suggestionPlugin, ...mgr.getPlugins(), styleResolverPlugin, documentContextPlugin],
   });
 }
 
@@ -140,7 +164,15 @@ function enumerateSlots(doc: Document | null): HfPartKey[] {
 
 export const HiddenHeaderFooterPMs = memo(
   forwardRef<HiddenHeaderFooterPMsRef, HiddenHeaderFooterPMsProps>(function HiddenHeaderFooterPMs(
-    { document, styles, theme, defaultTabStopTwips, onTransaction },
+    {
+      document,
+      styles,
+      theme,
+      isSuggesting = false,
+      author = 'User',
+      defaultTabStopTwips,
+      onTransaction,
+    },
     ref
   ) {
     // Keep the callback stable across renders — every HF EditorView's
@@ -149,6 +181,22 @@ export const HiddenHeaderFooterPMs = memo(
     // the EditorViews.
     const onTransactionRef = useRef(onTransaction);
     onTransactionRef.current = onTransaction;
+
+    // styleId for newly inserted tables — fixed per document load (a primitive,
+    // so safe in the effect deps unlike the `document` object whose identity
+    // changes on every body transaction).
+    const defaultTableStyleId = document?.package?.settings?.defaultTableStyle ?? null;
+
+    const isSuggestingRef = useRef(isSuggesting);
+    isSuggestingRef.current = isSuggesting;
+    const authorRef = useRef(author);
+    authorRef.current = author;
+
+    useEffect(() => {
+      for (const { view } of mountedRef.current.values()) {
+        setSuggestionMode(isSuggesting, view.state, view.dispatch, author);
+      }
+    }, [isSuggesting, author]);
     // Refs for the document writeback closure inside `dispatchTransaction`.
     // The EditorView is created once per rId; without a ref the
     // closure would capture the initial `document` and never see updates
@@ -246,7 +294,16 @@ export const HiddenHeaderFooterPMs = memo(
         node.dataset.hfKind = slot.kind;
         host.appendChild(node);
 
-        const state = buildInitialState(hf, styles, theme, defaultTabStopTwips, mgr);
+        const state = buildInitialState(
+          hf,
+          styles,
+          theme,
+          defaultTabStopTwips,
+          defaultTableStyleId,
+          mgr,
+          isSuggestingRef.current,
+          authorRef.current
+        );
         const slotRId = slot.rId;
         const slotKind = slot.kind;
         const view: EditorView = new EditorView(node, {
@@ -272,7 +329,7 @@ export const HiddenHeaderFooterPMs = memo(
       // ref; depending on `document` directly causes a full HF EditorView
       // re-mount on every body PM transaction (each Document.applyTransaction
       // returns a new identity), which destroys IME state and selection.
-    }, [slots, resolveHf, styles, theme, defaultTabStopTwips]);
+    }, [slots, resolveHf, styles, theme, defaultTabStopTwips, defaultTableStyleId]);
 
     // Tear everything down on unmount.
     useEffect(() => {
@@ -294,6 +351,13 @@ export const HiddenHeaderFooterPMs = memo(
       () => ({
         getView(rId: string): EditorView | null {
           return mountedRef.current.get(rId)?.view ?? null;
+        },
+        getViews(): Map<string, EditorView> {
+          const map = new Map<string, EditorView>();
+          for (const [rId, mounted] of mountedRef.current) {
+            map.set(rId, mounted.view);
+          }
+          return map;
         },
       }),
       []

@@ -349,6 +349,21 @@ export function parseSectionProperties(
   }
 
   // ============================================================================
+  // FOOTNOTE COLUMNS (w15:footnoteColumns)
+  // ============================================================================
+  // Word's "Footnote layout → Columns" setting. A w15 extension element that
+  // sits directly in w:sectPr (e.g. `<w15:footnoteColumns w:val="2"/>`),
+  // independent of the body's w:cols. findChild matches by local name, so it
+  // resolves regardless of the literal prefix the producer used.
+  const footnoteColumns = findChild(sectPr, 'w15', 'footnoteColumns');
+  if (footnoteColumns) {
+    const val = parseNumericAttribute(footnoteColumns, 'w', 'val');
+    if (val !== undefined && val > 0) {
+      props.footnoteColumns = val;
+    }
+  }
+
+  // ============================================================================
   // SECTION TYPE (w:type)
   // ============================================================================
   const typeEl = findChild(sectPr, 'w', 'type');
@@ -780,6 +795,7 @@ export function mergeSectionProperties(
   if (override.equalWidth !== undefined) result.equalWidth = override.equalWidth;
   if (override.separator !== undefined) result.separator = override.separator;
   if (override.columns !== undefined) result.columns = override.columns;
+  if (override.footnoteColumns !== undefined) result.footnoteColumns = override.footnoteColumns;
   if (override.sectionStart !== undefined) result.sectionStart = override.sectionStart;
   if (override.verticalAlign !== undefined) result.verticalAlign = override.verticalAlign;
   if (override.bidi !== undefined) result.bidi = override.bidi;

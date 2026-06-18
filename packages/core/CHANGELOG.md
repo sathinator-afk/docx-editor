@@ -1,5 +1,75 @@
 # @eigenpal/docx-editor-core
 
+## 1.8.1
+
+### Patch Changes
+
+- 6047f84: Emit `word/numbering.xml` when exporting documents whose lists have no original numbering part
+
+  `createDocx()` (and any export of a document built from scratch — e.g. the editor with no source `.docx`) wrote `<w:numPr w:numId=…>` onto list paragraphs but never generated the backing `word/numbering.xml`, nor its content-type override / document relationship. Word couldn't resolve the dangling `numId`s, so it silently dropped every bullet and number marker — ordered/bulleted lists opened with no markers.
+
+  `fromProseDoc` now reconstructs the numbering definitions from the editor's list state (the list attrs were previously discarded on the no-base path), and the repacker serializes them to `word/numbering.xml` — registering the content-type override and relationship — when the package doesn't already ship one. Documents that already contain a `numbering.xml` are passed through unchanged.
+
+## 1.8.0
+
+### Minor Changes
+
+- a1f4537: Render fonts embedded in a DOCX. Fonts a document carries in `word/fonts/*` are now de-obfuscated and loaded automatically, so it displays in its authored faces instead of a fallback. Fonts the document uses that the browser can render (embedded or installed on the system) also appear in the toolbar font picker under a "Document fonts" group.
+- 114e83e: Newly inserted tables now adopt the document's default table style. When a document declares a default table style (settings `w:defaultTableStyle`, otherwise the table style marked default), inserting a table from the toolbar or via the agent API gives it that style's borders, shading, cell margins, and header/banding instead of a plain black grid. Documents without a default table style keep the previous thin black border.
+
+### Patch Changes
+
+- 27740e1: Respect a document's own paragraph defaults instead of forcing the default-template spacing. A DOCX that ships `w:docDefaults` but no `Normal` style (common in generated files) no longer has 8pt after-spacing and 1.08 line spacing injected, so table rows and other unstyled paragraphs render at the compact height the document specifies. New and programmatically created content inherits the document's own `Normal`/`docDefaults`.
+
+  Preserve a complex field's run formatting (font size, color) when the field has no separate result run. A footer `PAGE` number whose `w:rPr` lives on the field run now keeps the surrounding text's size and color instead of falling back to the default.
+
+## 1.7.0
+
+### Minor Changes
+
+- ed04d10: Expose stable `data-para-id` attributes on rendered paragraph fragments and add `scrollToParaId(..., { highlight })` support for custom transient paragraph flashes.
+
+### Patch Changes
+
+- 35b5cee: Fix complex-script-only (RTL) runs rendering at font-size 0pt when copied to the clipboard and showing a blank font-size field in the toolbar. Changing a run's font size now sets both the Latin and complex-script size, matching Word.
+- 186598a: Reserve the document scrollbar gutter on both edges in the React editor so the page stays centered on platforms with classic scrollbars, matching the Vue editor. Fixes #888
+- dfd316f: Fix complex-script font size (w:szCs) and family (w:cs) fallback for RTL/CS runs.
+- 8e95d60: Fix a header (or footer) containing a page/margin-anchored shape — e.g. a full-page letterhead banner — inflating its interactive box to cover the whole page, which blocked clicks into the body text. The header/footer box now tracks the in-flow band height, and its overflowing anchored content is non-interactive in normal mode so the document text underneath stays clickable.
+- f2c9f9f: Add a "Select entire table" option to the table context menu and toolbar, and fix the underlying select-table command so it selects every cell (it previously collapsed the selection).
+- fc95983: Fix repeated table header overlapping body content on continuation pages when a row also breaks mid-content across the page boundary.
+- edd0bc2: Add themeable document-scrollbar CSS variables and apply the styled scrollbar to both React and Vue document scroll containers.
+- d4a27d4: Ensure a document whose last element is an isolating block (a table, text box, or content control) gets a trailing empty paragraph, so the caret can be placed below it and text can be added after it (matches Word, which never lets a body end with a table).
+
+## 1.6.2
+
+### Patch Changes
+
+- a8bce7a: Fix DOCX export validation at the source: normalize out-of-range paraId/textId and drop orphan comment anchors when parsing, preserve internal-target hyperlinks instead of rewriting them as external, unwrap targetless hyperlinks, and always emit a valid table grid.
+- 768b10e: Redesign the document outline toggle as a filled circular button in the left gutter (instead of a bare icon), tighten the outline panel's indentation, and keep the toggle and panel clear of the vertical ruler and of landscape pages.
+
+## 1.6.1
+
+### Patch Changes
+
+- 26a048f: Fix footnote rendering for footnotes referenced inside multi-page tables: reference marks now render superscript, the footnote-area number matches the note text's font, and a table that splits across pages distributes its footnotes to the page holding each row instead of dumping them all on the first table page.
+- 74ae87d: Preserve paragraph counts when DOCX imports contain leading hard page breaks. Fixes #830
+- a89af59: Preserve DOCX run boundaries during no-op ProseMirror round trips.
+- 6550426: Superscript and subscript text (including footnote/endnote reference marks) no longer increases the height of the line it sits on, matching Word.
+
+## 1.6.0
+
+### Patch Changes
+
+- 931931a: Fix the selection sliver not showing for empty paragraphs. Dragging a selection across a blank paragraph now paints the same fixed-width highlight already shown for `<br>` blank rows — `getSelectionRectsFromDom` now falls back to the enclosing `.layout-paragraph` position for unpositioned `.layout-empty-run` lines, mirroring the click/caret resolvers.
+- fa3383b: Balance terminal continuous multi-column sections so imported DOCX text flows across columns. Fixes #827.
+- 32c5382: Full-width floating (positioned) tables now paginate across pages instead of overflowing past the bottom margin. Previously such a table — common in contract templates where a full-width form table carries text-wrap positioning — rendered as one oversized block that bled past the page edge, left the next page blank, and pushed following content down. It now breaks across pages like Word and Google Docs, with the text after it flowing immediately below.
+- 7fe09f0: Share the paragraph-style-picker preview logic between the React and Vue toolbars. The filter/sort and per-style preview CSS now live once in `@eigenpal/docx-editor-core/utils/stylePreview` (`resolveParagraphStyleOptions` + `getStylePreviewProps`), which both adapters call, so the style dropdown can no longer drift between them. Also fixes a Vue toolbar bug where typing a font size and then clicking a preset could re-commit the typed value over the preset.
+- 7fe09f0: Unify the editor UI colors onto one CSS-variable token palette. The canonical chrome stylesheet now lives in `@eigenpal/docx-editor-core` (`packages/core/src/styles/editor.css`) and both adapters import it, so React and Vue can never drift. Component styles reference `--doc-*` tokens instead of hardcoded colors, and the shadcn HSL tokens are aligned to the same palette and support opacity modifiers. A commented `.ep-root.dark` scaffold is included as the structure for a future dark theme (no dark values are shipped yet — adding the `dark` class has no visual effect until they are filled in). Light-mode appearance is unchanged apart from minor consolidation of near-duplicate grays/blues. As part of this, the Vue full-screen loading overlay now uses the same dark backdrop with light text as React (previously a light backdrop), and the Vue editing-mode chip and toolbar dropdown elevation share React's hover/shadow tokens. The Vue toolbar buttons, dropdown triggers, menu items, and steppers now reference the same shadcn `foreground`/`muted-foreground`/`muted`/`border` tokens React uses (previously the `--doc-*` family), so the toolbar matches React in both light and dark mode; the dropdown triggers also render at React's normal weight (they previously looked bold), and the selected menu item uses React's grey highlight instead of an indigo tint.
+- f50a3c7: Render VML pictures (e.g. legacy header logos) instead of dropping them, and stop the watermark parser from claiming a non-watermark VML picture. Anchored images now follow their own `wp:positionH` alignment, defaulting to left like Word, rather than inheriting the paragraph alignment.
+- 7fe09f0: Polish the Vue toolbar and comment cards to match React. The toolbar font-size box is now correctly editable (typing commits on Enter/blur; +/− and arrow steppers no longer revert; the preset dropdown opens positioned), is the same height as React's, and steps by 1 beyond the preset list; the style-picker dropdown previews match React's sizes/weights and the menu is the same compact width instead of ballooning. Comment and tracked-change cards now use the shared near-white card color and drop shadow (new `--doc-card`/`--doc-card-shadow` tokens, sourced once in core) in both collapsed and expanded states, instead of a blue tint and a divergent shadow, matching React.
+
+  Further menu and submenu parity with React: the top menu bar (File/Format/Insert/Help) items and triggers use full-strength text instead of muted grey, with matching shortcut hints and submenu borders; the style dropdown no longer clips its last entries; font-picker group labels render Title Case; the alignment control is now a horizontal icon strip with a blue active state (matching React's AlignmentButtons) instead of a vertical labeled menu; and the comments sidebar width matches React (340px).
+
 ## 1.5.0
 
 ### Minor Changes

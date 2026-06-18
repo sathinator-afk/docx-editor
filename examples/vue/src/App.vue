@@ -10,6 +10,7 @@
         :document-buffer="documentBuffer"
         :document="currentDocument"
         :show-toolbar="true"
+        :show-help-menu="showHelpMenu"
         :document-name="fileName"
         :fonts="customFonts"
         :watermark-presets="['SAMPLE', 'DEMO ONLY', 'PREVIEW', 'NOT FOR DISTRIBUTION']"
@@ -22,6 +23,7 @@
       >
         <template #title-bar-left>
           <div class="title-bar-left-group">
+            <BrandLogo />
             <span class="switcher" role="tablist" aria-label="Adapter">
               <a :href="reactHref" role="tab" :aria-selected="false" class="pill">React</a>
               <a :href="vueHref" role="tab" :aria-selected="true" class="pill active">Vue</a>
@@ -106,6 +108,7 @@ import { computed, ref, onBeforeUnmount, onMounted } from 'vue';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-vue';
 import { de as deLocale } from '@eigenpal/docx-editor-i18n';
 import ExampleSwitcher from '../../shared/ExampleSwitcher.vue';
+import BrandLogo from '../../shared/BrandLogo.vue';
 import { createEmptyDocument, findStartPosForParaId } from '@eigenpal/docx-editor-core';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
@@ -184,6 +187,12 @@ const showAgentPanel = computed(() => {
   const params = new URLSearchParams(window.location.search);
   if (params.get('agentPanel') === '1' || params.has('agentTimeline')) return true;
   return import.meta.env.VITE_DOCX_EDITOR_AGENT_PANEL === '1';
+});
+
+// E2E hook: `?hideHelpMenu=1` hides the Help menu (parity with the React prop).
+const showHelpMenu = computed(() => {
+  if (typeof window === 'undefined') return true;
+  return new URLSearchParams(window.location.search).get('hideHelpMenu') !== '1';
 });
 
 // AgentTimeline fixture for E2E parity. Mirrors examples/vite App.tsx so a

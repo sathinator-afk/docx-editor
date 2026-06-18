@@ -203,14 +203,24 @@ function applyRunStyles(
     element.style.textDecorationLine = decorations.join(' ');
   }
 
-  // Superscript/subscript
+  // Superscript/subscript. Use `position: relative` (a paint-only offset) to
+  // raise/lower the glyph rather than `vertical-align: super/sub`. CSS grows
+  // the line box to contain any vertical-align shift, so `super`/`sub` made the
+  // painted line taller than Word draws it — and taller than the line the
+  // measurement engine reserved (measuring is base-font only; it has no
+  // superscript awareness). A relative offset shifts only where the glyph is
+  // painted, leaving the in-flow box — and therefore the line height — unchanged.
+  // The `top` magnitudes are tuned to approximate Word's super/subscript raise;
+  // `font-size: 0.75em` already keeps the box shorter than the line.
   if (run.superscript) {
-    element.style.verticalAlign = 'super';
     element.style.fontSize = '0.75em';
+    element.style.position = 'relative';
+    element.style.top = '-0.4em';
   }
   if (run.subscript) {
-    element.style.verticalAlign = 'sub';
     element.style.fontSize = '0.75em';
+    element.style.position = 'relative';
+    element.style.top = '0.2em';
   }
 
   // Hidden run (OOXML w:vanish, §17.3.2.41). In Word's print/normal view
@@ -567,6 +577,7 @@ function renderBlockImage(run: ImageRun, doc: Document): HTMLElement {
   }
 
   applyPmPositions(container, run.pmStart, run.pmEnd);
+
   container.appendChild(img);
 
   return container;

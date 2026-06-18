@@ -84,8 +84,12 @@ function reportFontError(error: unknown, context: string): void {
   }
 }
 
-function faceKey(family: string, weight: number | string = 'normal'): string {
-  return `${family.trim()}|${weight}`;
+function faceKey(
+  family: string,
+  weight: number | string = 'normal',
+  style: 'normal' | 'italic' = 'normal'
+): string {
+  return `${family.trim()}|${weight}|${style}`;
 }
 
 // "A genuine system font satisfies this family" — the decision behind every
@@ -557,12 +561,14 @@ export async function loadFontFromBuffer(
   buffer: ArrayBuffer,
   options?: {
     weight?: number | string;
+    style?: 'normal' | 'italic';
   }
 ): Promise<boolean> {
   if (typeof document === 'undefined') return false;
 
   const normalizedFamily = fontFamily.trim();
-  const key = faceKey(normalizedFamily, options?.weight);
+  const style = options?.style ?? 'normal';
+  const key = faceKey(normalizedFamily, options?.weight, style);
 
   // Provenance: mark before the async work so an in-flight registration
   // already counts as registered (see loadFontWithMapping). Marking a family
@@ -583,16 +589,17 @@ export async function loadFontFromBuffer(
       const blob = new Blob([buffer], { type: 'font/ttf' });
       const url = URL.createObjectURL(blob);
 
-      const style = document.createElement('style');
-      style.textContent = `
+      const styleEl = document.createElement('style');
+      styleEl.textContent = `
       @font-face {
         font-family: "${normalizedFamily}";
         src: url(${url}) format('truetype');
         font-weight: ${options?.weight ?? 'normal'};
+        font-style: ${style};
         font-display: swap;
       }
     `;
-      document.head.appendChild(style);
+      document.head.appendChild(styleEl);
 
       await waitForFontAvailable(normalizedFamily, 3000);
 

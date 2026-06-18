@@ -56,6 +56,7 @@ import {
 } from './xmlParser';
 import { resolveThemeFontRef } from './themeParser';
 import { parseImage } from './imageParser';
+import { parseVmlImageContent } from './vmlImageParser';
 
 /**
  * Parse color value from attributes
@@ -643,10 +644,17 @@ function parseRunContents(
         break;
 
       case 'pict':
-      case 'object':
-        // Legacy VML pictures/objects - will handle in shape parser
-        // For now, skip these
+      case 'object': {
+        // Legacy VML pictures (e.g. header logos): <w:pict><v:shape>
+        // <v:imagedata r:id/></v:shape></w:pict>. Watermark shapes are left to
+        // extractWatermark. Non-image VML (text watermarks, drawn shapes) is
+        // still ignored here.
+        const vmlImage = parseVmlImageContent(child, rels, media);
+        if (vmlImage) {
+          contents.push(vmlImage);
+        }
         break;
+      }
 
       case 'rPr':
         // Run properties - already handled separately

@@ -11,7 +11,8 @@ export const FontSizeExtension = createMarkExtension({
   schemaMarkName: 'fontSize',
   markSpec: {
     attrs: {
-      size: { default: 24 },
+      size: { default: null },
+      sizeCs: { default: null },
     },
     parseDOM: [
       {
@@ -33,7 +34,10 @@ export const FontSizeExtension = createMarkExtension({
       },
     ],
     toDOM(mark) {
-      const size = mark.attrs.size as number;
+      // `size` can be null for complex-script-only (RTL) runs that carry only
+      // `sizeCs`; fall back to it (then Word's 12pt default) so toDOM/clipboard
+      // never emit `font-size: 0pt`.
+      const size = (mark.attrs.size ?? mark.attrs.sizeCs ?? 24) as number;
       const pt = size / 2;
       const lineHeight = (pt * 1.15).toFixed(2);
       return ['span', { style: `font-size: ${pt}pt; line-height: ${lineHeight}pt` }, 0];
@@ -42,7 +46,9 @@ export const FontSizeExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     return {
       commands: {
-        setFontSize: (size: number) => setMark(ctx.schema.marks.fontSize, { size }),
+        // Word sets both w:sz and w:szCs when the size changes, so populate both
+        // to keep complex-script (RTL) runs in sync and round-tripping.
+        setFontSize: (size: number) => setMark(ctx.schema.marks.fontSize, { size, sizeCs: size }),
         clearFontSize: () => removeMark(ctx.schema.marks.fontSize),
       },
     };

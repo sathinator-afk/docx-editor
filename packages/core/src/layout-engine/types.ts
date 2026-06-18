@@ -367,6 +367,8 @@ export type ParagraphBlock = {
   sdtGroups?: SdtGroup[];
   kind: 'paragraph';
   id: BlockId;
+  /** Stable Word `w14:paraId` / PM `paraId`, when available. */
+  paraId?: string;
   runs: Run[];
   attrs?: ParagraphAttrs;
   /** ProseMirror start position for this block. */
@@ -943,6 +945,8 @@ export type Page = {
   footnoteIds?: number[];
   /** Height reserved for the footnote area at page bottom (pixels). */
   footnoteReservedHeight?: number;
+  /** Footnote-area columns (`w15:footnoteColumns`); absent/1 = single column. */
+  footnoteColumns?: number;
   /** Column layout for this page (if multi-column). */
   columns?: ColumnLayout;
 };

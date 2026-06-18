@@ -61,9 +61,13 @@ export {
   selectionTrackerKey,
   createDocumentStylesPlugin,
   getDocumentStyleResolver,
+  documentContextKey,
+  createDocumentContextPlugin,
+  getDocumentTheme,
+  getDefaultTableStyleId,
   documentStylesKey,
 } from './plugins';
-export type { SelectionContext, SelectionChangeCallback } from './plugins';
+export type { SelectionContext, SelectionChangeCallback, DocumentContext } from './plugins';
 
 // Commands
 export {

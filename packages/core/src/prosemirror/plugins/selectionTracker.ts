@@ -217,7 +217,15 @@ function extractTextFormatting(state: EditorState): TextFormatting {
         formatting.highlight = mark.attrs.color;
         break;
       case 'fontSize':
-        formatting.fontSize = mark.attrs.size;
+        // CS-only RTL runs carry the size in `sizeCs`; fall back so the toolbar
+        // field isn't blank for them.
+        formatting.fontSize = mark.attrs.size ?? mark.attrs.sizeCs;
+        // Preserve a genuinely distinct complex-script size so a run with
+        // different Latin/CS sizes survives a read -> textFormattingToMarks
+        // round-trip (e.g. stored-mark persistence); without it fontSizeCs
+        // stays undefined and the next write re-aligns sizeCs to fontSize.
+        // Only set when sizeCs is present so Latin-only runs stay fontSize-only.
+        if (mark.attrs.sizeCs != null) formatting.fontSizeCs = mark.attrs.sizeCs;
         break;
       case 'fontFamily':
         formatting.fontFamily = {

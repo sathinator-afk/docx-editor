@@ -32,6 +32,7 @@ import { undo, redo } from 'prosemirror-history';
 import {
   schema,
   createDocumentStylesPlugin,
+  createDocumentContextPlugin,
   ensureParaIdsInState,
 } from '@eigenpal/docx-editor-core/prosemirror';
 import { toProseDoc, createEmptyDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion';
@@ -157,6 +158,12 @@ function createInitialState(
   // Expose the document's styles to style-aware commands (e.g. the Enter
   // handler's `w:next` switch from heading to body text).
   const styleResolverPlugin = createDocumentStylesPlugin(effectiveStyles);
+  // Document context (theme + settings `w:defaultTableStyle`) for the
+  // table-insert command's default-table-style adoption.
+  const documentContextPlugin = createDocumentContextPlugin({
+    theme: document?.package?.theme ?? null,
+    defaultTableStyleId: document?.package?.settings?.defaultTableStyle ?? null,
+  });
 
   // External plugins go first so they can intercept before extension keymaps
   // (e.g. suggestion mode must handle Backspace/Delete before deleteSelection)
@@ -164,6 +171,7 @@ function createInitialState(
     ...externalPlugins,
     ...(manager?.getPlugins() ?? []),
     styleResolverPlugin,
+    documentContextPlugin,
   ];
 
   // Give every paragraph a paraId up front (docs without `w14:paraId` ship

@@ -105,6 +105,17 @@ export {
 } from './fontLoader';
 export type { FontDefinition } from './fontLoader';
 
+// Embedded fonts (de-obfuscation + load + picker discovery)
+export { deobfuscateFont, isValidFontKey } from './fontDeobfuscation';
+export { getEmbeddedFontFaces, loadEmbeddedFonts, getEmbeddedFontFamilies } from './embeddedFonts';
+export type { EmbeddedFontFace } from './embeddedFonts';
+export {
+  getRenderableDocumentFonts,
+  selectRenderableFonts,
+  excludeFontsByName,
+} from './documentPickerFonts';
+export type { RenderableFontOptions } from './documentPickerFonts';
+
 // Formatting → CSS style
 export {
   textToStyle,
@@ -218,6 +229,17 @@ export {
   createSelectionChangeHandler,
 } from './selectionHighlight';
 export type { HighlightRect, SelectionHighlightConfig, SelectionRange } from './selectionHighlight';
+
+// Paragraph flash helpers
+export {
+  DEFAULT_PARAGRAPH_FLASH_COLOR,
+  DEFAULT_PARAGRAPH_FLASH_DURATION_MS,
+  PARAGRAPH_FLASH_CLASS_NAME,
+  findParagraphFragmentsByParaId,
+  flashParagraphElements,
+  flashParagraphFragmentsByParaId,
+} from './paragraphFlash';
+export type { ParagraphHighlightOptions, ScrollToParaIdOptions } from './paragraphFlash';
 
 // Table split algorithm
 export {

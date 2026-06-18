@@ -62,6 +62,36 @@ export function buildRowYPositions(rows: TableMeasure['rows']): number[] {
 }
 
 /**
+ * Clip box for the windowed body of a continuation fragment that repeats a
+ * header. The header occupies [0, headerHeight] of the table element; the body
+ * must clip its already-shown top slice (a row resumed mid-content) BELOW the
+ * header instead of painting over it — the table's single overflow:hidden only
+ * clips outside the whole fragment. Returns the element to append body rows into
+ * and the Y origin to subtract from full-table coordinates. With no header the
+ * table's own overflow:hidden suffices, so the table element is reused as-is.
+ * (overflowX stays visible so per-row change bars at left:-10px aren't cut off.)
+ */
+export function makeTableBodyClip(
+  tableEl: HTMLElement,
+  headerHeight: number,
+  visibleHeight: number,
+  width: number,
+  doc: Document
+): { bodyParent: HTMLElement; bodyOriginY: number } {
+  if (headerHeight <= 0) return { bodyParent: tableEl, bodyOriginY: 0 };
+  const bodyClip = doc.createElement('div');
+  bodyClip.style.position = 'absolute';
+  bodyClip.style.left = '0';
+  bodyClip.style.top = `${headerHeight}px`;
+  bodyClip.style.width = `${width}px`;
+  bodyClip.style.height = `${Math.max(0, visibleHeight - headerHeight)}px`;
+  bodyClip.style.overflowX = 'visible';
+  bodyClip.style.overflowY = 'hidden';
+  tableEl.appendChild(bodyClip);
+  return { bodyParent: bodyClip, bodyOriginY: headerHeight };
+}
+
+/**
  * Build a single-column horizontal rule that closes a table fragment at a page
  * break. Word draws this "cut edge" so each fragment reads as a complete
  * bordered box; our rows clip at the window so the natural border is off-screen.

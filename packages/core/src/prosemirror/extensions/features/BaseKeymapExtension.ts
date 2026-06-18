@@ -194,9 +194,21 @@ export function applyPostSplitInheritance(
   const dtf: TextFormatting = { ...((newAttrs.defaultTextFormatting as TextFormatting) ?? {}) };
   let dtfChanged = false;
   for (const m of effectiveMarks) {
-    if (m.type.name === 'fontSize' && (m.attrs.size as number) !== dtf.fontSize) {
-      dtf.fontSize = m.attrs.size as number;
-      dtfChanged = true;
+    if (m.type.name === 'fontSize') {
+      const fontSize = (m.attrs.size ?? m.attrs.sizeCs) as number;
+      if (fontSize !== dtf.fontSize) {
+        dtf.fontSize = fontSize;
+        dtfChanged = true;
+      }
+      // Carry a genuinely distinct complex-script size across the split too, so
+      // a mixed Latin/CS run isn't flattened to the Latin size on Enter (the
+      // write path defaults sizeCs to fontSize when fontSizeCs is absent).
+      // Mirrors the mark read paths; only set when sizeCs is present.
+      const sizeCs = m.attrs.sizeCs as number | null;
+      if (sizeCs != null && sizeCs !== dtf.fontSizeCs) {
+        dtf.fontSizeCs = sizeCs;
+        dtfChanged = true;
+      }
     }
     if (m.type.name === 'fontFamily') {
       const ascii = m.attrs.ascii as string | undefined;

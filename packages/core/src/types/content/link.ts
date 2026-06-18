@@ -4,6 +4,7 @@
  */
 
 import type { Run } from './run';
+import type { TextFormatting } from '../formatting';
 
 /**
  * Hyperlink (`w:hyperlink`) — wraps runs in a clickable link. External
@@ -138,6 +139,14 @@ export interface ComplexField {
   fieldCode: Run[];
   /** Display result runs */
   fieldResult: Run[];
+  /**
+   * Run formatting carried by the field's structural runs (the runs holding
+   * the `w:fldChar` begin/separate/end). Word styles the field result with
+   * this `w:rPr` when there is no separate result run (e.g. a `PAGE` field
+   * collapsed into a single run). Used as a fallback for rendering and
+   * serialization so the formatting survives the round-trip.
+   */
+  formatting?: TextFormatting;
   /** Field is locked */
   fldLock?: boolean;
   /** Field is dirty */

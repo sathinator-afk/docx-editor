@@ -21,6 +21,11 @@ import { EditorView } from 'prosemirror-view';
 // Core imports — these all resolve through Vite aliases to packages/core/src/
 import { parseDocx } from '@eigenpal/docx-editor-core/docx/parser';
 import {
+  getRenderableDocumentFonts,
+  getEmbeddedFontFamilies,
+} from '@eigenpal/docx-editor-core/utils';
+import type { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
+import {
   toProseDoc,
   createEmptyDoc,
   headerFooterToProseDoc,
@@ -33,6 +38,7 @@ import {
   createSuggestionModePlugin,
   setSuggestionMode,
   createDocumentStylesPlugin,
+  createDocumentContextPlugin,
 } from '@eigenpal/docx-editor-core/prosemirror/plugins';
 import {
   ExtensionManager,
@@ -217,6 +223,11 @@ export interface UseDocxEditorReturn {
   isReady: Ref<boolean>;
   /** Last parse error message, or null if the most recent load succeeded. */
   parseError: Ref<string | null>;
+  /**
+   * Fonts the loaded document references that the browser can render (embedded
+   * faces + system-resolved), for the picker's "Document fonts" group.
+   */
+  documentFonts: Ref<FontOption[]>;
   /** Computed page layout. */
   layout: ShallowRef<Layout | null>;
   /** Load a DOCX from a binary buffer. */
@@ -245,6 +256,8 @@ export interface UseDocxEditorReturn {
   getHfPmView: (
     hf: import('@eigenpal/docx-editor-core/types/document').HeaderFooter
   ) => EditorView | null;
+  /** Get all active header/footer EditorViews mapped by rId. */
+  getHfPmViews: () => Map<string, EditorView>;
   /**
    * Re-mount / tear down HF EditorViews to match the current document's
    * `package.headers/footers`. Call this after the inline overlay saves
@@ -285,6 +298,12 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   const editorState = shallowRef<EditorState | null>(null);
   const isReady = ref(false);
   const parseError = ref<string | null>(null);
+  /**
+   * Fonts the loaded document references that the browser can render (embedded
+   * faces + system-resolved), for the picker's "Document fonts" group. Mirrors
+   * React's `documentFonts` state.
+   */
+  const documentFonts = ref<FontOption[]>([]);
   /**
    * Latest layout result. Exposed so consumers (PageIndicator, scroll-to-page)
    * can read page count + per-page geometry without re-running the engine.
@@ -432,11 +451,18 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     // handler's `w:next` switch from heading to body text). Mirrors React's
     // HiddenProseMirror createInitialState.
     const styleResolverPlugin = createDocumentStylesPlugin(docStyles);
+    // Document context (theme + settings `w:defaultTableStyle`) for the
+    // table-insert command's default-table-style adoption.
+    const documentContextPlugin = createDocumentContextPlugin({
+      theme: document.value?.package?.theme ?? null,
+      defaultTableStyleId: document.value?.package?.settings?.defaultTableStyle ?? null,
+    });
     const plugins: Plugin[] = [
       suggestionPlugin,
       ...externalPlugins,
       ...(mgr.getPlugins() ?? []),
       styleResolverPlugin,
+      documentContextPlugin,
     ];
 
     // Give every paragraph a paraId up front (docs without `w14:paraId` ship
@@ -532,20 +558,6 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       });
     }
   }
-
-  // Sync editorMode/author to the mounted suggestion-mode plugin.
-  // Mirrors React's DocxEditor.tsx useEffect that calls setSuggestionMode
-  // whenever editingMode or author changes. Without this watch, the Vue
-  // `mode="suggesting"` prop would not actually activate the plugin —
-  // typed text would land as plain edits.
-  watch(
-    [() => unref(editorMode), () => unref(author), editorView],
-    ([mode, who, view]) => {
-      if (!view) return;
-      setSuggestionMode(mode === 'suggesting', view.state, view.dispatch, who);
-    },
-    { immediate: true }
-  );
 
   function destroyEditorView() {
     // Drop any pending coalesced layout frame so a reload (destroy → recreate)
@@ -650,6 +662,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     const theme = pkg.theme ?? null;
     // Read from package.settings (canonical) not editorState (race on first sync).
     const defaultTabStopTwips = pkg.settings?.defaultTabStop ?? null;
+    const defaultTableStyleId = pkg.settings?.defaultTableStyle ?? null;
     for (const rId of wantRIds) {
       if (hfViews.has(rId)) continue;
       const hf = pkg.headers?.get(rId) ?? pkg.footers?.get(rId);
@@ -674,10 +687,25 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       // Header/footer paragraphs share the document's style table, so they get
       // the same style-aware behavior (e.g. Enter after a heading → body text).
       const hfStyleResolverPlugin = createDocumentStylesPlugin(styles);
+      // Document context (theme + settings `w:defaultTableStyle`) so inserting a
+      // table in a header/footer adopts the default table style too.
+      const hfDocumentContextPlugin = createDocumentContextPlugin({
+        theme,
+        defaultTableStyleId,
+      });
+      const hfSuggestionPlugin = createSuggestionModePlugin(
+        unref(editorMode) === 'suggesting',
+        unref(author)
+      );
       const state = EditorState.create({
         doc: pmDoc,
         schema,
-        plugins: [...mgr.getPlugins(), hfStyleResolverPlugin],
+        plugins: [
+          hfSuggestionPlugin,
+          ...mgr.getPlugins(),
+          hfStyleResolverPlugin,
+          hfDocumentContextPlugin,
+        ],
       });
       const slotKind = kind;
       const view: EditorView = new EditorView(node, {
@@ -719,6 +747,25 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     }
   }
 
+  // Sync editorMode/author to the mounted suggestion-mode plugin.
+  // Mirrors React's DocxEditor.tsx useEffect that calls setSuggestionMode
+  // whenever editingMode or author changes. Without this watch, the Vue
+  // `mode="suggesting"` prop would not actually activate the plugin —
+  // typed text would land as plain edits.
+  watch(
+    [() => unref(editorMode), () => unref(author), editorView],
+    ([mode, who, view]) => {
+      const active = mode === 'suggesting';
+      if (view) {
+        setSuggestionMode(active, view.state, view.dispatch, who);
+      }
+      for (const hfView of hfViews.values()) {
+        setSuggestionMode(active, hfView.state, hfView.dispatch, who);
+      }
+    },
+    { immediate: true }
+  );
+
   // Listener slot — DocxEditor.vue subscribes here to update caret + UI
   // chrome on every HF transaction. Held in a ref so swapping it doesn't
   // require resetting the `dispatchTransaction` closure on each EditorView.
@@ -756,6 +803,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
 
       const doc = await parseDocx(arrayBuf);
       document.value = doc;
+      updateDocumentFonts(doc);
 
       // Recreate PM view with new document
       destroyEditorView();
@@ -772,10 +820,19 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   function loadDocument(doc: Document) {
     parseError.value = null;
     document.value = doc;
+    updateDocumentFonts(doc);
     destroyEditorView();
     destroyHfPMs();
     createEditorView();
     syncHfPMs();
+  }
+
+  // Surface the document's own renderable fonts (embedded faces loaded by
+  // parseDocx; system fonts probed) in the picker. Mirrors React's loader.
+  function updateDocumentFonts(doc: Document) {
+    documentFonts.value = getRenderableDocumentFonts(doc, {
+      embeddedFamilies: getEmbeddedFontFamilies(doc.package?.fontTable),
+    });
   }
 
   // ========================================================================
@@ -843,6 +900,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     editorState,
     isReady,
     parseError,
+    documentFonts,
     layout,
 
     // Actions
@@ -860,6 +918,9 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
 
     // HF unification surface — phase 6 of openspec/changes/unify-hf-editing.
     getHfPmView,
+    getHfPmViews(): Map<string, EditorView> {
+      return hfViews;
+    },
     syncHfPMs,
     setHfTransactionListener,
     /**

@@ -24,3 +24,23 @@ export function generateHexId(): string {
     .toUpperCase()
     .padStart(8, '0');
 }
+
+const LONG_HEX_ID_RE = /^[0-9A-Fa-f]{8}$/;
+
+/** True for an 8-hex `ST_LongHexNumber` strictly below {@link MAX_HEX_ID_EXCLUSIVE}. */
+export function isValidLongHexId(id: string | undefined): boolean {
+  if (!id || !LONG_HEX_ID_RE.test(id)) return false;
+  return parseInt(id, 16) < MAX_HEX_ID_EXCLUSIVE;
+}
+
+/**
+ * Normalize a `w14:paraId` / `w14:textId` value read from a source document.
+ * Word and strict validators reject ids that are malformed or `>= 0x7FFFFFFF`;
+ * such values only ever enter the model from foreign exporters, so we replace
+ * them with a freshly generated valid id at parse time. Valid ids pass through
+ * unchanged to preserve round-trip fidelity.
+ */
+export function normalizeLongHexId(id: string | undefined): string | undefined {
+  if (id == null) return undefined;
+  return isValidLongHexId(id) ? id : generateHexId();
+}

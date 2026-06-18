@@ -96,6 +96,17 @@ export const wordFeatures: WordFeature[] = [
     notes: 'Custom fonts registered via the fonts prop; theme fonts resolved from the OOXML theme.',
   },
   {
+    id: 'text.embedded-fonts',
+    name: 'Embedded fonts',
+    category: 'text',
+    editing: 'partial',
+    rendering: 'full',
+    roundTrip: 'preserved',
+    tier: 'community',
+    notes:
+      'Fonts embedded in the file (word/fonts) are de-obfuscated and rendered, and become selectable in the toolbar under a Document fonts group. The embedded binaries are preserved on save; the editor does not add new embedded fonts.',
+  },
+  {
     id: 'text.color',
     name: 'Text color (RGB + theme colors)',
     category: 'text',
@@ -322,12 +333,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'images.wmf',
     name: 'WMF / EMF legacy vector images',
     category: 'images',
-    editing: 'partial',
-    rendering: 'full',
+    editing: 'none',
+    rendering: 'planned',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Rendered via on-the-fly conversion (vector where possible, raster fallback) at the OOXML extent; the original WMF/EMF bytes are preserved on save.',
+      'The original WMF/EMF bytes are parsed and preserved losslessly on save, but browsers cannot decode these legacy metafiles, so the image does not yet display. On-the-fly conversion (vector where possible, raster fallback) is planned.',
   },
   {
     id: 'images.tracked',
@@ -344,10 +355,10 @@ export const wordFeatures: WordFeature[] = [
     category: 'images',
     editing: 'partial',
     rendering: 'partial',
-    roundTrip: 'full',
+    roundTrip: 'partial',
     tier: 'community',
     notes:
-      'Anchored text boxes render (incl. page-anchored letterhead shapes in headers); shape geometry editing is limited.',
+      'Anchored text boxes render (incl. page-anchored letterhead shapes in headers) and round-trip. Standalone drawn shapes (rect, oval, line) parse and serialize but do not yet render; custom-geometry shapes degrade to a rectangle on save.',
   },
 
   // --- Page layout, headers & footers --------------------------------------

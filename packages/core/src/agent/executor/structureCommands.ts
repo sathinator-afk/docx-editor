@@ -22,6 +22,12 @@ import type {
   RemoveHyperlinkCommand,
 } from '../../types/agentApi';
 import { pixelsToEmu } from '../../utils/units';
+import { DEFAULT_TABLE_WIDTH_DXA, distributeColumnWidths } from '../../utils/tableWidth';
+import {
+  createStyleResolver,
+  resolvePreferredNewTableStyleId,
+  DEFAULT_NEW_TABLE_LOOK,
+} from '../../prosemirror/styles';
 import {
   cloneDocument,
   createTextRun,
@@ -37,6 +43,7 @@ import {
 export function executeInsertTable(doc: Document, command: InsertTableCommand): Document {
   const newDoc = cloneDocument(doc);
   const body = newDoc.package.document;
+  const columnWidths = distributeColumnWidths(DEFAULT_TABLE_WIDTH_DXA, command.columns);
 
   // Create table structure
   const rows: TableRow[] = [];
@@ -48,6 +55,9 @@ export function executeInsertTable(doc: Document, command: InsertTableCommand): 
       const cellText = command.data?.[r]?.[c] || '';
       cells.push({
         type: 'tableCell',
+        formatting: columnWidths[c]
+          ? { width: { value: columnWidths[c], type: 'dxa' } }
+          : undefined,
         content: [
           {
             type: 'paragraph',
@@ -64,8 +74,31 @@ export function executeInsertTable(doc: Document, command: InsertTableCommand): 
     });
   }
 
+  // Adopt the document's default table style when it declares one (settings
+  // `w:defaultTableStyle`, else the type-default table style) so agent-inserted
+  // tables match the document/template, just like the toolbar insert. The
+  // styleId serializes as `<w:tblStyle>` and re-resolves through the same
+  // OOXML cascade (`convertTable`) on render. When no usable default style
+  // exists, the table carries no styleId and inherits the type-default style's
+  // borders via that cascade, preserving prior behavior.
+  const resolver = createStyleResolver(newDoc.package.styles);
+  const preferredStyleId = resolvePreferredNewTableStyleId(
+    newDoc.package.settings?.defaultTableStyle,
+    resolver
+  );
+
+  // Give agent-inserted tables an explicit fixed grid so they serialize with a
+  // valid w:tblGrid and render with predictable column widths.
   const table: Table = {
     type: 'table',
+    formatting: {
+      width: { value: DEFAULT_TABLE_WIDTH_DXA, type: 'dxa' },
+      layout: 'fixed',
+      ...(preferredStyleId
+        ? { styleId: preferredStyleId, look: { ...DEFAULT_NEW_TABLE_LOOK } }
+        : {}),
+    },
+    columnWidths,
     rows,
   };
 

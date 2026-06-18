@@ -304,6 +304,7 @@ const paragraphNodeSpec: NodeSpec = {
     outlineLevel: { default: null },
     bookmarks: { default: null },
     _originalFormatting: { default: null },
+    _originalRunBoundaries: { default: null },
     _sectionProperties: { default: null },
     // Tracked structural revisions on the paragraph mark itself.
     // See ECMA-376 §17.13.5 — w:ins / w:del inside w:pPr/w:rPr.
@@ -580,8 +581,13 @@ function makeApplyStyle(schema: Schema) {
         if (rpr.italic) {
           styleMarks.push(schema.marks.italic.create());
         }
-        if (rpr.fontSize) {
-          styleMarks.push(schema.marks.fontSize.create({ size: rpr.fontSize }));
+        if (rpr.fontSize || rpr.fontSizeCs) {
+          styleMarks.push(
+            schema.marks.fontSize.create({
+              size: rpr.fontSize ?? null,
+              sizeCs: rpr.fontSizeCs ?? rpr.fontSize ?? null,
+            })
+          );
         }
         if (rpr.fontFamily) {
           styleMarks.push(

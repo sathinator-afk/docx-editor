@@ -112,10 +112,13 @@ export function applyFormatting(view: EditorView, options: ApplyFormattingOption
   }
   if (m.fontSize !== undefined && schema.marks.fontSize) {
     if (m.fontSize > 0) {
+      // Word sets both w:sz and w:szCs on a size change; mirror that so
+      // complex-script (RTL) runs keep their size and round-trip.
+      const halfPoints = pointsToHalfPoints(m.fontSize);
       tr = tr.addMark(
         from,
         to,
-        schema.marks.fontSize.create({ size: pointsToHalfPoints(m.fontSize) })
+        schema.marks.fontSize.create({ size: halfPoints, sizeCs: halfPoints })
       );
     } else {
       tr = tr.removeMark(from, to, schema.marks.fontSize);

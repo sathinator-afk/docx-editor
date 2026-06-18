@@ -1,5 +1,64 @@
 # @eigenpal/nuxt-docx-editor
 
+## 1.8.1
+
+### Patch Changes
+
+- @eigenpal/docx-editor-vue@1.8.1
+
+## 1.8.0
+
+### Patch Changes
+
+- @eigenpal/docx-editor-vue@1.8.0
+
+## 1.7.0
+
+### Patch Changes
+
+- Updated dependencies [c0923f7]
+- Updated dependencies [6be8146]
+- Updated dependencies [769f1f5]
+- Updated dependencies [36a7414]
+- Updated dependencies [e740694]
+- Updated dependencies [421faf1]
+- Updated dependencies [edd0bc2]
+- Updated dependencies [78af476]
+- Updated dependencies [94b5816]
+  - @eigenpal/docx-editor-vue@1.7.0
+
+## 1.6.2
+
+### Patch Changes
+
+- Updated dependencies [768b10e]
+- Updated dependencies [0ac0a4f]
+  - @eigenpal/docx-editor-vue@1.6.2
+
+## 1.6.1
+
+### Patch Changes
+
+- @eigenpal/docx-editor-vue@1.6.1
+
+## 1.6.0
+
+### Patch Changes
+
+- Updated dependencies [3a4a03f]
+- Updated dependencies [bbda628]
+- Updated dependencies [5509418]
+- Updated dependencies [7fe09f0]
+- Updated dependencies [7fe09f0]
+- Updated dependencies [7fe09f0]
+- Updated dependencies [b8011f8]
+- Updated dependencies [7fe09f0]
+- Updated dependencies [7fe09f0]
+- Updated dependencies [7fe09f0]
+- Updated dependencies [7fe09f0]
+- Updated dependencies [7fe09f0]
+  - @eigenpal/docx-editor-vue@1.6.0
+
 ## 1.5.0
 
 ### Patch Changes

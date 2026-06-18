@@ -85,6 +85,11 @@
    * dark buttons, badges, tooltips). Inverts in dark mode so contrast holds. */
   --doc-on-primary: #ffffff;
 
+  /* Active toolbar toggle (bold/italic/comments/...): dark slab in light mode,
+   * Word-accent tint in dark mode (where a dark slab would flip light). */
+  --doc-toggle-active-bg: hsl(var(--foreground));
+  --doc-toggle-active-fg: #ffffff;
+
   /* Text */
   --doc-text: #202124; /* primary text */
   --doc-text-muted: #5f6368; /* secondary text */
@@ -126,6 +131,12 @@
   /* Focus ring & text selection (derived from primary) */
   --doc-focus-ring: rgba(26, 115, 232, 0.4);
   --doc-selection: rgba(26, 115, 232, 0.3);
+
+  /* Document scroll container scrollbar */
+  --doc-scrollbar-size: 14px;
+  --doc-scrollbar-thumb: color-mix(in srgb, var(--doc-text-muted) 45%, transparent);
+  --doc-scrollbar-thumb-hover: color-mix(in srgb, var(--doc-text-muted) 65%, transparent);
+  --doc-scrollbar-track: transparent;
 }
 
 /* ========================================================================
@@ -183,6 +194,8 @@
   --doc-accent: #4e9dff;
   --doc-accent-bg: #1f3047;
   --doc-on-primary: #1f1f1f; /* text/icon on a filled primary surface */
+  --doc-toggle-active-bg: var(--doc-primary-light);
+  --doc-toggle-active-fg: var(--doc-primary);
   --doc-text: #e8e8e8; /* primary text */
   --doc-text-muted: #a0a0a0; /* secondary text */
   --doc-text-subtle: #6e6e6e; /* tertiary/disabled text */
@@ -264,6 +277,50 @@
   .ep-root.dark .layout-page video {
     filter: none;
   }
+}
+
+/* ============================================================================
+ * DOCUMENT SCROLLBAR
+ * ============================================================================ */
+
+.ep-root .docx-editor__scroll-container,
+.ep-root .docx-editor-vue__pages-viewport {
+  scrollbar-width: auto;
+  scrollbar-color: var(--doc-scrollbar-thumb) var(--doc-scrollbar-track);
+}
+
+.ep-root .docx-editor__scroll-container {
+  /* `both-edges` reserves a symmetric gutter so the centered page stays centered
+     on classic-scrollbar platforms (single-edge nudges it ~7px left). Matches
+     the Vue viewport (DocxEditor.css `__pages-viewport`). */
+  scrollbar-gutter: stable both-edges;
+}
+
+.ep-root .docx-editor__scroll-container::-webkit-scrollbar,
+.ep-root .docx-editor-vue__pages-viewport::-webkit-scrollbar {
+  width: var(--doc-scrollbar-size);
+  height: var(--doc-scrollbar-size);
+}
+
+.ep-root .docx-editor__scroll-container::-webkit-scrollbar-track,
+.ep-root .docx-editor-vue__pages-viewport::-webkit-scrollbar-track {
+  background: var(--doc-scrollbar-track);
+}
+
+.ep-root .docx-editor__scroll-container::-webkit-scrollbar-thumb,
+.ep-root .docx-editor-vue__pages-viewport::-webkit-scrollbar-thumb {
+  background: var(--doc-scrollbar-thumb);
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background-clip: content-box;
+}
+
+.ep-root .docx-editor__scroll-container:hover::-webkit-scrollbar-thumb,
+.ep-root .docx-editor-vue__pages-viewport:hover::-webkit-scrollbar-thumb {
+  background: var(--doc-scrollbar-thumb-hover);
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background-clip: content-box;
 }
 
 /* ============================================================================
@@ -470,6 +527,22 @@
   border-bottom: 2px dashed rgba(156, 39, 176, 0.6);
 }
 
+/* Transient paragraph flash used by scrollToParaId({ highlight }). */
+.layout-paragraph.docx-paragraph-flash {
+  animation: docx-paragraph-flash-fade var(--docx-paragraph-flash-duration, 1200ms) ease-out both;
+}
+
+@keyframes docx-paragraph-flash-fade {
+  0%,
+  70% {
+    box-shadow: inset 0 0 0 9999px var(--docx-paragraph-flash-color, rgba(255, 235, 59, 0.55));
+  }
+
+  100% {
+    box-shadow: inset 0 0 0 9999px transparent;
+  }
+}
+
 /* ============================================================================
  * SELECTION OVERLAY (for programmatic highlighting)
  * ============================================================================ */
@@ -632,6 +705,51 @@
 /* Outline heading hover */
 .docx-outline-heading-btn:hover {
   background-color: var(--doc-bg-hover);
+}
+
+/* React toolbar toggle buttons (bold/italic/comments/...). Owned here, not via
+ * Tailwind utilities: `cn` is clsx-only (no tailwind-merge), so competing
+ * hover:bg utilities don't dedupe and the active slab could lose its color on
+ * hover (white icon on a light bg). The `.ep-root` prefix outranks the
+ * single-class Tailwind hover utilities. */
+.ep-root .ep-toolbar-toggle:hover {
+  background-color: var(--doc-bg-hover);
+  color: var(--doc-text);
+}
+.ep-root .ep-toolbar-toggle[data-active='true'],
+.ep-root .ep-toolbar-toggle[data-active='true']:hover {
+  background-color: var(--doc-toggle-active-bg);
+  color: var(--doc-toggle-active-fg);
+}
+
+/* Outline / navigation toggle button (shown when the panel is collapsed).
+ * Google-Docs-style filled circular control: a resting disc + ring so it
+ * reads as a button against the gray document gutter (--doc-bg), darkening
+ * on hover. Adapters supply only position (it tracks horizontal scroll). */
+.docx-outline-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--doc-border-light);
+  background: var(--doc-bg-hover);
+  color: var(--doc-text-muted);
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.docx-outline-toggle:hover {
+  background: var(--doc-border);
+  color: var(--doc-text);
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.18);
+}
+.docx-outline-toggle:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
 }
 
 /* ============================================================================

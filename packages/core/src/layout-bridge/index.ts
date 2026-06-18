@@ -96,10 +96,13 @@ export {
   buildFootnoteRenderItems,
   footnoteReservedHeightsEqual,
   stabilizeFootnoteLayout,
+  distributeFootnotesIntoColumns,
   FOOTNOTE_SEPARATOR_HEIGHT,
+  FOOTNOTE_COLUMN_GAP_PX,
   MAX_FOOTNOTE_LAYOUT_PASSES,
 } from './footnoteLayout';
 export type {
+  FootnoteRefLocation,
   MeasureBlocksFn,
   ConvertFootnoteOptions,
   StabilizeFootnoteLayoutArgs,

@@ -36,7 +36,7 @@ export const FontFamilyExtension = createMarkExtension({
     ],
     toDOM(mark) {
       const attrs = mark.attrs as FontFamilyAttrs;
-      const fontName = attrs.ascii || attrs.hAnsi;
+      const fontName = attrs.ascii || attrs.hAnsi || attrs.cs;
       if (!fontName) {
         return ['span', 0];
       }

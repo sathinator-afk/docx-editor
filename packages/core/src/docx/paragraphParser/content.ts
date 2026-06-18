@@ -473,6 +473,10 @@ export function parseParagraphContents(
   // into position — preserving order vs. any in-paragraph non-run content (e.g.
   // a real TOC's first entry hyperlink shares the begin paragraph).
   let complexFieldStartIndex = 0;
+  // The structural run carrying `begin` holds the field's run properties. Capture
+  // them so the result keeps its formatting even when there is no separate result
+  // run to read it from.
+  let complexFieldFormatting: Run['formatting'] | undefined;
 
   for (const child of children) {
     const localName = getLocalName(child.name);
@@ -528,12 +532,21 @@ export function parseParagraphContents(
           complexFieldDirty = false;
           complexFieldRuns = [];
           complexFieldStartIndex = contents.length;
+          // The structural run carrying `begin` holds the field's run properties.
+          // Capture them so the result keeps its formatting even when there is no
+          // separate result run to read it from.
+          complexFieldFormatting = run.formatting;
         }
 
         if (inComplexField) {
           complexFieldRuns.push(run);
           if (instrText) {
             complexFieldInstr += instrText;
+          }
+          // Prefer any field run that actually carries formatting (the begin
+          // run is often empty in docs that put `w:rPr` on a later code run).
+          if (!complexFieldFormatting && run.formatting) {
+            complexFieldFormatting = run.formatting;
           }
 
           if (hasFieldSeparate) {
@@ -560,6 +573,7 @@ export function parseParagraphContents(
               fieldResult: complexFieldResultRuns,
             };
 
+            if (complexFieldFormatting) complexField.formatting = complexFieldFormatting;
             if (complexFieldLock) complexField.fldLock = true;
             if (complexFieldDirty) complexField.dirty = true;
 

@@ -273,6 +273,7 @@ export interface FontPickerProps {
     className?: string;
     // (undocumented)
     disabled?: boolean;
+    documentFonts?: readonly FontOption[];
     // (undocumented)
     fonts?: FontOption[];
     // (undocumented)
@@ -1135,7 +1136,7 @@ export interface TableToolbarProps {
 }
 
 // @public
-export type TextContextAction = 'cut' | 'copy' | 'paste' | 'pasteAsPlainText' | 'selectAll' | 'delete' | 'separator' | 'addRowAbove' | 'addRowBelow' | 'deleteRow' | 'addColumnLeft' | 'addColumnRight' | 'deleteColumn' | 'mergeCells' | 'splitCell' | 'addComment';
+export type TextContextAction = 'cut' | 'copy' | 'paste' | 'pasteAsPlainText' | 'selectAll' | 'delete' | 'separator' | 'addRowAbove' | 'addRowBelow' | 'deleteRow' | 'addColumnLeft' | 'addColumnRight' | 'deleteColumn' | 'mergeCells' | 'splitCell' | 'selectTable' | 'deleteTable' | 'addComment';
 
 // @public (undocumented)
 export const TextContextMenu: React__default.FC<TextContextMenuProps>;
@@ -1208,6 +1209,7 @@ export interface ToolbarProps {
     className?: string;
     currentFormatting?: SelectionFormatting;
     disabled?: boolean;
+    documentFonts?: readonly FontOption[];
     documentStyles?: Style[];
     editorRef?: React__default.RefObject<HTMLElement>;
     enableShortcuts?: boolean;
@@ -1250,6 +1252,7 @@ export interface ToolbarProps {
     showAlignmentButtons?: boolean;
     showFontPicker?: boolean;
     showFontSizePicker?: boolean;
+    showHelpMenu?: boolean;
     showHighlightColorPicker?: boolean;
     showLineSpacingPicker?: boolean;
     showListButtons?: boolean;

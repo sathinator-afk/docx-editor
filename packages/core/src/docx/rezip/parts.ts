@@ -2,8 +2,8 @@
  * Part Enumeration
  *
  * Shared helpers for walking the parts of a DOCX package (body, headers,
- * footers) when registering newly inserted images and hyperlinks against
- * each part's rels file.
+ * footers, footnotes, endnotes) when registering newly inserted images and
+ * hyperlinks against each part's rels file.
  */
 
 import type JSZip from 'jszip';
@@ -35,12 +35,33 @@ export function headerFooterFilename(target: string): string {
 
 /**
  * Enumerate all parts that may contain newly inserted images/hyperlinks:
- * the document body plus every header and footer.
+ * the document body, every header and footer, and the footnote/endnote parts.
+ * Footnotes/endnotes always serialize to the fixed `word/footnotes.xml` /
+ * `word/endnotes.xml`, so their rels paths are fixed too.
  */
 export function collectParts(doc: Document): Part[] {
   const parts: Part[] = [
     { relsPath: 'word/_rels/document.xml.rels', blocks: doc.package.document.content },
   ];
+
+  const noteBlocks = (notes: { content: BlockContent[] }[] | undefined): BlockContent[] =>
+    (notes ?? []).flatMap((note) => note.content);
+
+  const footnoteBlocks = [
+    ...noteBlocks(doc.package.footnoteSeparators),
+    ...noteBlocks(doc.package.footnotes),
+  ];
+  if (footnoteBlocks.length > 0) {
+    parts.push({ relsPath: 'word/_rels/footnotes.xml.rels', blocks: footnoteBlocks });
+  }
+
+  const endnoteBlocks = [
+    ...noteBlocks(doc.package.endnoteSeparators),
+    ...noteBlocks(doc.package.endnotes),
+  ];
+  if (endnoteBlocks.length > 0) {
+    parts.push({ relsPath: 'word/_rels/endnotes.xml.rels', blocks: endnoteBlocks });
+  }
 
   const rels = doc.package.relationships;
   if (!rels) return parts;

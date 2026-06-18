@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { generateHexId, MAX_HEX_ID_EXCLUSIVE } from './hexId';
+import { generateHexId, isValidLongHexId, MAX_HEX_ID_EXCLUSIVE, normalizeLongHexId } from './hexId';
 
 describe('MAX_HEX_ID_EXCLUSIVE', () => {
   test('matches the strictest ST_LongHexNumber cap (durableId)', () => {
@@ -61,6 +61,37 @@ describe('generateHexId', () => {
       expect(value).toBeLessThan(0x7fffffff);
     } finally {
       Math.random = original;
+    }
+  });
+});
+
+describe('isValidLongHexId', () => {
+  test('accepts 8-hex ids below the cap, rejects malformed or over-cap ids', () => {
+    expect(isValidLongHexId('0000ABCD')).toBe(true);
+    expect(isValidLongHexId('7FFFFFFE')).toBe(true);
+    expect(isValidLongHexId('7FFFFFFF')).toBe(false); // == cap
+    expect(isValidLongHexId('F2345678')).toBe(false); // > cap
+    expect(isValidLongHexId('ABC')).toBe(false); // too short
+    expect(isValidLongHexId('GHIJKLMN')).toBe(false); // non-hex
+    expect(isValidLongHexId(undefined)).toBe(false);
+  });
+});
+
+describe('normalizeLongHexId', () => {
+  test('passes valid ids through unchanged', () => {
+    expect(normalizeLongHexId('0000ABCD')).toBe('0000ABCD');
+    expect(normalizeLongHexId('7FFFFFFE')).toBe('7FFFFFFE');
+  });
+
+  test('maps undefined to undefined', () => {
+    expect(normalizeLongHexId(undefined)).toBeUndefined();
+  });
+
+  test('replaces out-of-range/malformed ids with a freshly valid id', () => {
+    for (const bad of ['F2345678', '80000000', 'XYZ', '123']) {
+      const out = normalizeLongHexId(bad);
+      expect(out).not.toBe(bad);
+      expect(isValidLongHexId(out)).toBe(true);
     }
   });
 });

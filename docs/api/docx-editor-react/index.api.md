@@ -27,6 +27,7 @@ import * as prosemirror_view from 'prosemirror-view';
 import * as React_2 from 'react';
 import { ReactNode } from 'react';
 import { RenderedDomContext } from '@eigenpal/docx-editor-core/plugin-api';
+import { ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 import { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
 import { SidebarItem } from '@eigenpal/docx-editor-core/plugin-api';
 import { TFunction } from '@eigenpal/docx-editor-i18n';
@@ -45,7 +46,7 @@ export const DocxEditor: React_2.ForwardRefExoticComponent<DocxEditorProps & Rea
 
 // @public
 export interface DocxEditorHandle extends EditorHandle {
-    scrollToParaId: (paraId: string) => boolean;
+    scrollToParaId: (paraId: string, options?: ScrollToParaIdOptions) => boolean;
     scrollToPosition: (pmPos: number) => void;
     setZoom: (zoom: number) => void;
 }
@@ -57,6 +58,7 @@ export interface DocxEditorProps {
     className?: string;
     colorMode?: 'light' | 'dark' | 'system';
     comments?: Comment_2[];
+    commentsSidebarOpen?: boolean;
     disableFindReplaceShortcuts?: boolean;
     document?: Document_2 | null;
     documentBuffer?: DocxInput | null;
@@ -77,6 +79,7 @@ export interface DocxEditorProps {
     onCommentReply?: (reply: Comment_2, parent: Comment_2) => void;
     onCommentResolve?: (comment: Comment_2) => void;
     onCommentsChange?: (comments: Comment_2[]) => void;
+    onCommentsSidebarOpenChange?: (open: boolean) => void;
     onCopy?: () => void;
     onCut?: () => void;
     onDocumentNameChange?: (name: string) => void;
@@ -84,6 +87,7 @@ export interface DocxEditorProps {
     onError?: (error: Error) => void;
     onFontsLoaded?: () => void;
     onModeChange?: (mode: EditorMode) => void;
+    onOpen?: (file: File) => void | Promise<void>;
     onPaste?: () => void;
     onPrint?: () => void;
     onRenderedDomContextReady?: (context: RenderedDomContext) => void;
@@ -98,6 +102,8 @@ export interface DocxEditorProps {
     renderLogo?: () => ReactNode;
     renderTitleBarRight?: () => ReactNode;
     rulerUnit?: 'inch' | 'cm';
+    showFileOpen?: boolean;
+    showHelpMenu?: boolean;
     showMarginGuides?: boolean;
     showOutline?: boolean;
     showOutlineButton?: boolean;
@@ -204,7 +210,7 @@ export interface DocxEditorRef {
     scrollToCommentId: (commentId: number) => boolean;
     scrollToContentControl: (filter: ContentControlFilter) => boolean;
     scrollToPage: (pageNumber: number) => void;
-    scrollToParaId: (paraId: string) => boolean;
+    scrollToParaId: (paraId: string, options?: ScrollToParaIdOptions) => boolean;
     scrollToPosition: (pmPos: number) => void;
     setContentControlContent: (filter: ContentControlFilter, text: string, options?: {
         force?: boolean;

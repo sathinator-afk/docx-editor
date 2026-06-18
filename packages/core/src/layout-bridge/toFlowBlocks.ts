@@ -356,6 +356,7 @@ function convertParagraph(
   return {
     kind: 'paragraph',
     id: nextBlockId(),
+    paraId: pmAttrs.paraId || undefined,
     runs,
     attrs,
     pmStart: startPos,

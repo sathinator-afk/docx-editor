@@ -29,6 +29,7 @@ import { DecorationLayer } from './overlays/DecorationLayer';
 
 // Layout engine
 import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
+import type { ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 
 // Layout bridge
 import { DEFAULT_PAGE_HEIGHT_PX } from '@eigenpal/docx-editor-core/layout-bridge';
@@ -190,6 +191,10 @@ export interface PagedEditorProps {
   onTotalPagesChange?: (totalPages: number) => void;
   /** Set of resolved comment IDs — hides highlight for these comments */
   resolvedCommentIds?: Set<number>;
+  /** Suggestion mode active state */
+  isSuggesting?: boolean;
+  /** Active author for suggestion mode */
+  author?: string;
 }
 
 export interface PagedEditorRef {
@@ -221,9 +226,10 @@ export interface PagedEditorRef {
   scrollToPosition(pmPos: number): void;
   /**
    * Scroll to the paragraph identified by Word `w14:paraId` / PM `paraId`.
+   * Pass `options.highlight` to briefly flash rendered paragraph fragments.
    * @returns whether a matching paragraph was found
    */
-  scrollToParaId(paraId: string): boolean;
+  scrollToParaId(paraId: string, options?: ScrollToParaIdOptions): boolean;
   /**
    * Scroll the paginated view so `pageNumber` (1-indexed) is in view.
    * No-op if the layout isn't ready yet or pageNumber is out of range.
@@ -262,6 +268,8 @@ export interface PagedEditorRef {
    * focus router (phase 3).
    */
   getHfPmView(hf: HeaderFooter): EditorView | null;
+  /** Get all active header/footer EditorViews mapped by rId. */
+  getHfPmViews(): Map<string, EditorView>;
 }
 
 // =============================================================================
@@ -318,6 +326,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onHyperlinkPopupEdit,
       onHyperlinkPopupRemove,
       onHyperlinkPopupClose,
+      isSuggesting = false,
+      author = 'User',
     } = props;
 
     // Resolve the scroll container: prefer parent-provided ref, fallback to own container
@@ -838,6 +848,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           document={document}
           styles={styles}
           theme={_theme}
+          isSuggesting={isSuggesting}
+          author={author}
           defaultTabStopTwips={document?.package?.settings?.defaultTabStop ?? null}
           onTransaction={(rId, view, docChanged) => {
             // Only re-layout when the HF doc actually changed — selection-only

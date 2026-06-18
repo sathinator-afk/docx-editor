@@ -30,6 +30,7 @@ import {
   buildRowYPositions,
   isVisibleBorder,
   makeCutBorder,
+  makeTableBodyClip,
 } from './renderTableBorders';
 import type { RevisionInfo } from '../types/content/trackedChange';
 
@@ -790,6 +791,19 @@ export function renderTableFragment(
       : toFragmentY(rowYPositions[fragment.toRow] ?? 0);
   tableEl.style.height = `${visibleHeight}px`;
 
+  // A repeated header occupies [0, headerHeight]; the windowed body gets its own
+  // clip box below it so a row resumed mid-content doesn't paint over the header
+  // (see makeTableBodyClip). With no header, the table element is reused as-is.
+  const { bodyParent, bodyOriginY } = makeTableBodyClip(
+    tableEl,
+    headerHeight,
+    visibleHeight,
+    fragment.width,
+    doc
+  );
+  // Full-table Y within `bodyParent` (== toFragmentY when there's no clip box).
+  const toBodyY = (fullY: number): number => toFragmentY(fullY) - bodyOriginY;
+
   // Track spanning cells across rows within this fragment.
   const spanningCells = new Map<string, SpanningCell>();
 
@@ -837,14 +851,14 @@ export function renderTableFragment(
       context,
       doc
     );
-    cellEl.style.top = `${toFragmentY(rowYPositions[g.rowIndex] ?? 0)}px`;
+    cellEl.style.top = `${toBodyY(rowYPositions[g.rowIndex] ?? 0)}px`;
     cellEl.dataset.columnIndex = String(g.columnIndex);
     // Synthetic continuation slice: not directly selectable (the editable cell
     // lives on the fragment that owns its restart row).
     cellEl.dataset.vmergeContinuation = 'true';
     delete cellEl.dataset.pmStart;
     delete cellEl.dataset.pmEnd;
-    tableEl.appendChild(cellEl);
+    bodyParent.appendChild(cellEl);
   }
 
   // Render content rows from fragment.fromRow to fragment.toRow in window coords.
@@ -865,7 +879,7 @@ export function renderTableFragment(
       row,
       rowMeasure,
       rowIndex,
-      toFragmentY(rowYPositions[rowIndex] ?? 0),
+      toBodyY(rowYPositions[rowIndex] ?? 0),
       measure.columnWidths,
       block.rows.length,
       context,
@@ -876,7 +890,7 @@ export function renderTableFragment(
       fragWholeTableTracked
     );
 
-    tableEl.appendChild(rowEl);
+    bodyParent.appendChild(rowEl);
   }
 
   // Close a fragment at a page break with a horizontal border on the cut edge,

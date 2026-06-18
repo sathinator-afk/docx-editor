@@ -8,7 +8,7 @@
  */
 
 import { type Command, type EditorState, type Transaction } from 'prosemirror-state';
-import { CellSelection } from 'prosemirror-tables';
+import { CellSelection, TableMap } from 'prosemirror-tables';
 import { getTableContext } from '../context';
 
 export const selectTable: Command = (
@@ -19,11 +19,15 @@ export const selectTable: Command = (
   if (!context.isInTable || context.tablePos === undefined || !context.table) return false;
 
   if (dispatch) {
+    // `CellSelection.create` needs positions that point AT a cell (the
+    // position just before the cell node), not at the enclosing row. Use the
+    // table's grid map to resolve the top-left and bottom-right cells — this
+    // is correct for merged cells too.
+    const map = TableMap.get(context.table);
     const tableStart = context.tablePos + 1;
-    // Find first and last cell in the table
-    const $first = state.doc.resolve(tableStart);
-    const $last = state.doc.resolve(context.tablePos + context.table.nodeSize - 2);
-    const cellSel = CellSelection.create(state.doc, $first.pos, $last.pos);
+    const firstCellPos = tableStart + map.map[0];
+    const lastCellPos = tableStart + map.map[map.map.length - 1];
+    const cellSel = CellSelection.create(state.doc, firstCellPos, lastCellPos);
     dispatch(state.tr.setSelection(cellSel));
   }
   return true;

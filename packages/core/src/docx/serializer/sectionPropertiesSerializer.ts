@@ -441,6 +441,14 @@ export function serializeSectionProperties(props: SectionProperties | undefined)
     parts.push(colsXml);
   }
 
+  // Footnote columns (w15:footnoteColumns) — Word emits this immediately after
+  // w:cols. It is a w15-extension child of w:sectPr; the w15 namespace is
+  // already declared on the document root by the document serializer. Only emit
+  // for an explicit multi-column value (1 is the default and Word omits it).
+  if (props.footnoteColumns !== undefined && props.footnoteColumns > 1) {
+    parts.push(`<w15:footnoteColumns w:val="${intAttr(props.footnoteColumns)}"/>`);
+  }
+
   // Remaining EG_SectPrContents elements MUST follow schema order
   // (wml.xsd CT_SectPr): ... cols, vAlign, titlePg, bidi, docGrid. Emitting
   // docGrid early or bidi before titlePg makes strict OOXML validators reject

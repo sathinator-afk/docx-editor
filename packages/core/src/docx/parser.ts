@@ -47,7 +47,11 @@ import {
   isSeparatorEndnote,
 } from './footnoteParser';
 import { parseComments } from './commentParser';
+import { removeOrphanCommentRanges } from './commentRangeIntegrity';
+import { dedupeParagraphIds } from './paragraphIdIntegrity';
 import { loadFontsWithMapping } from '../utils/fontLoader';
+import { loadEmbeddedFonts } from '../utils/embeddedFonts';
+import { parseFontTable } from './fontTableParser';
 import { type DocxInput, toArrayBuffer } from '../utils/docxInput';
 
 // ============================================================================
@@ -164,6 +168,9 @@ export async function parseDocx(input: DocxInput, options: ParseOptions = {}): P
     });
     onProgress('Parsed styles', 30);
 
+    // Parse the font table (font declarations + embedded-face references).
+    const fontTable = timeStage('fontTable', () => parseFontTable(raw.fontTableXml));
+
     // ========================================================================
     // STAGE 5: Parse numbering (30-35%)
     // ========================================================================
@@ -274,6 +281,16 @@ export async function parseDocx(input: DocxInput, options: ParseOptions = {}): P
     if (preloadFonts) {
       onProgress('Loading fonts...', 80);
       await timeStageAsync('fonts', () => loadDocumentFonts(theme, styleDefinitions, documentBody));
+      // Register the document's own embedded fonts (de-obfuscated `.odttf`) so
+      // it renders in its authored faces rather than a substitute. No-op
+      // outside a DOM and when the file embeds no fonts. The returned
+      // successfully-loaded set is intentionally not threaded out: adapters
+      // surface every declared-embed family (getEmbeddedFontFamilies) so
+      // subsetted faces the canvas probe can't detect still appear in the
+      // picker. Per-face load failures are warned inside loadEmbeddedFonts.
+      await timeStageAsync('embeddedFonts', () =>
+        loadEmbeddedFonts(fontTable, raw.fonts, findFontTableRels(raw))
+      );
       onProgress('Loaded fonts', 95);
     } else {
       onProgress('Skipping font loading', 95);
@@ -290,6 +307,7 @@ export async function parseDocx(input: DocxInput, options: ParseOptions = {}): P
       theme,
       numbering: numbering.definitions,
       settings,
+      fontTable,
       headers,
       footers,
       footnotes,
@@ -306,6 +324,14 @@ export async function parseDocx(input: DocxInput, options: ParseOptions = {}): P
       templateVariables,
       warnings: warnings.length > 0 ? warnings : undefined,
     };
+
+    // Drop comment-range markers that don't resolve to a parsed comment, so the
+    // model never carries orphan anchors that Word/validators reject on export.
+    removeOrphanCommentRanges(document);
+
+    // Give every paragraph a unique w14:paraId; foreign exporters sometimes
+    // duplicate them, which Word flags as a collaboration-identity collision.
+    dedupeParagraphIds(document);
 
     const totalTime = performance.now() - parseStart;
     if (totalTime > 2000) {
@@ -330,6 +356,17 @@ export async function parseDocx(input: DocxInput, options: ParseOptions = {}): P
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+/**
+ * Locate `word/_rels/fontTable.xml.rels` in the unzipped package (case
+ * preserved in ZIP entries varies by producer, so match case-insensitively).
+ */
+function findFontTableRels(raw: RawDocxContent): string | null {
+  for (const [path, xml] of raw.allXml) {
+    if (path.toLowerCase() === 'word/_rels/fonttable.xml.rels') return xml;
+  }
+  return null;
+}
 
 /**
  * Build media file map from raw content and relationships

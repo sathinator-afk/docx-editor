@@ -51,6 +51,7 @@ import {
 import { processNewHyperlinks } from './rezip/hyperlinks';
 import {
   ensureHeaderFooterParts,
+  ensureNumberingPart,
   serializeCommentsToZip,
   serializeHeadersFootersToZip,
   serializeFootnotesToZip,
@@ -148,6 +149,10 @@ export async function repackDocx(doc: Document, options: RepackOptions = {}): Pr
 
   await ensureHeaderFooterParts(exportDocument, newZip, compressionLevel);
 
+  // Synthesize word/numbering.xml for documents that reference list numIds but
+  // have no original numbering part to preserve (e.g. createDocx()).
+  await ensureNumberingPart(exportDocument, newZip, compressionLevel);
+
   // Serialize comments
   await serializeCommentsToZip(exportDocument, newZip, compressionLevel);
 
@@ -237,6 +242,10 @@ export async function repackDocxFromRaw(
   serializeHeadersFootersToZip(exportDocument, newZip, compressionLevel);
 
   await ensureHeaderFooterParts(exportDocument, newZip, compressionLevel);
+
+  // Synthesize word/numbering.xml for documents that reference list numIds but
+  // have no original numbering part to preserve (e.g. createDocx()).
+  await ensureNumberingPart(exportDocument, newZip, compressionLevel);
 
   // Serialize comments
   await serializeCommentsToZip(exportDocument, newZip, compressionLevel);

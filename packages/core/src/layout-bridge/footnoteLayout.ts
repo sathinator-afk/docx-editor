@@ -15,12 +15,14 @@
  */
 
 import type {
+  BlockId,
   FlowBlock,
   ParagraphBlock,
   Measure,
   Page,
   Layout,
   FootnoteContent,
+  TextRun,
 } from '../layout-engine/types';
 import { layoutDocument, type LayoutOptions } from '../layout-engine';
 import type { Document, Footnote, StyleDefinitions, Theme } from '../types/document';
@@ -31,6 +33,14 @@ import { getFootnoteText } from '../docx/footnoteParser';
 
 /** Separator line height + vertical padding in pixels. */
 export const FOOTNOTE_SEPARATOR_HEIGHT = 12;
+
+/**
+ * Gutter between footnote columns when `w15:footnoteColumns` > 1, in pixels
+ * (≈ 0.25in). Shared by the reserved-height/measurement path (core) and the
+ * footnote painter so a footnote measured at column width paints into a column
+ * of exactly that width. Single-column footnotes never consult it.
+ */
+export const FOOTNOTE_COLUMN_GAP_PX = 24;
 
 /**
  * Hard cap on the multi-pass footnote layout loop. Reserving footnote
@@ -92,8 +102,29 @@ const FOOTNOTE_FONT_SIZE_PT = 8;
 // ============================================================================
 
 /**
+ * Where a footnote reference lives, as found by {@link collectFootnoteRefs}.
+ *
+ * `pmPos` alone is enough to attribute a reference to a page for ordinary
+ * (paragraph) content, whose fragments carry a per-page pm sub-range. A table
+ * is different: it splits across pages by ROW, but every `TableFragment` keeps
+ * the whole table's `pmStart`/`pmEnd` (those drive selection mapping and must
+ * not be narrowed). So for a reference authored inside a table cell we also
+ * record the OUTERMOST table's id and the index of the row that contains it,
+ * letting {@link mapFootnotesToPages} attribute the reference to the page that
+ * actually laid out that row.
+ */
+export type FootnoteRefLocation = {
+  footnoteId: number;
+  pmPos: number;
+  /** Id of the outermost enclosing table block, when the ref is in a table cell. */
+  tableBlockId?: BlockId;
+  /** Index (into the outermost table's `rows`) of the row holding the ref. */
+  rowIndex?: number;
+};
+
+/**
  * Scan FlowBlocks for runs with footnoteRefId set.
- * Returns a list of { footnoteId, pmPos } in document order.
+ * Returns a list of {@link FootnoteRefLocation} in document order.
  *
  * Recurses into container blocks (table cells, text boxes) so footnote
  * references authored anywhere in the body reach the page-reservation
@@ -101,13 +132,18 @@ const FOOTNOTE_FONT_SIZE_PT = 8;
  * gets mapped to a page and the per-page `.layout-footnote-area` silently
  * drops that entry even though the body still renders the in-line ref
  * marker.
+ *
+ * For refs inside a table, the OUTERMOST table's id and row index are
+ * recorded (a nested table keeps the outer context, since the outer row is
+ * what the paginator splits into per-page fragments).
  */
-export function collectFootnoteRefs(
-  blocks: FlowBlock[]
-): Array<{ footnoteId: number; pmPos: number }> {
-  const refs: Array<{ footnoteId: number; pmPos: number }> = [];
+export function collectFootnoteRefs(blocks: FlowBlock[]): FootnoteRefLocation[] {
+  const refs: FootnoteRefLocation[] = [];
 
-  const walk = (input: FlowBlock[]): void => {
+  const walk = (
+    input: FlowBlock[],
+    tableCtx?: { tableBlockId: BlockId; rowIndex: number }
+  ): void => {
     for (const block of input) {
       if (block.kind === 'paragraph') {
         for (const run of block.runs) {
@@ -115,17 +151,20 @@ export function collectFootnoteRefs(
             refs.push({
               footnoteId: run.footnoteRefId,
               pmPos: run.pmStart ?? 0,
+              ...(tableCtx ?? {}),
             });
           }
         }
       } else if (block.kind === 'table') {
-        for (const row of block.rows) {
+        block.rows.forEach((row, rowIndex) => {
           for (const cell of row.cells) {
-            walk(cell.blocks);
+            // Keep the outermost table context for nested tables: the outer
+            // row is the unit the paginator places on a page.
+            walk(cell.blocks, tableCtx ?? { tableBlockId: block.id, rowIndex });
           }
-        }
+        });
       } else if (block.kind === 'textBox') {
-        walk(block.content);
+        walk(block.content, tableCtx);
       }
     }
   };
@@ -147,26 +186,42 @@ export function collectFootnoteRefs(
  */
 export function mapFootnotesToPages(
   pages: Page[],
-  footnoteRefs: Array<{ footnoteId: number; pmPos: number }>
+  footnoteRefs: FootnoteRefLocation[]
 ): Map<number, number[]> {
   const pageFootnotes = new Map<number, number[]>();
 
   if (footnoteRefs.length === 0) return pageFootnotes;
 
-  // For each footnote ref, find which page it lands on
+  const assign = (pageNumber: number, footnoteId: number): void => {
+    const existing = pageFootnotes.get(pageNumber) ?? [];
+    // Avoid duplicates (same footnote shouldn't appear twice on same page)
+    if (!existing.includes(footnoteId)) existing.push(footnoteId);
+    pageFootnotes.set(pageNumber, existing);
+  };
+
+  // For each footnote ref, find which page it lands on.
   for (const ref of footnoteRefs) {
+    let found = false;
     for (const page of pages) {
-      let found = false;
       for (const fragment of page.fragments) {
-        const pmStart = fragment.pmStart ?? -1;
-        const pmEnd = fragment.pmEnd ?? -1;
-        if (pmStart >= 0 && pmEnd >= 0 && ref.pmPos >= pmStart && ref.pmPos < pmEnd) {
-          const existing = pageFootnotes.get(page.number) ?? [];
-          // Avoid duplicates (same footnote shouldn't appear twice on same page)
-          if (!existing.includes(ref.footnoteId)) {
-            existing.push(ref.footnoteId);
-          }
-          pageFootnotes.set(page.number, existing);
+        let match = false;
+        if (ref.tableBlockId != null && ref.rowIndex != null) {
+          // In-table ref: a table splits across pages by row, but every
+          // fragment keeps the whole table's pm range, so a pm-position match
+          // would land every ref on the first table page. Attribute the ref to
+          // the fragment whose [fromRow, toRow) slice contains its row.
+          match =
+            fragment.kind === 'table' &&
+            fragment.blockId === ref.tableBlockId &&
+            ref.rowIndex >= fragment.fromRow &&
+            ref.rowIndex < fragment.toRow;
+        } else {
+          const pmStart = fragment.pmStart ?? -1;
+          const pmEnd = fragment.pmEnd ?? -1;
+          match = pmStart >= 0 && pmEnd >= 0 && ref.pmPos >= pmStart && ref.pmPos < pmEnd;
+        }
+        if (match) {
+          assign(page.number, ref.footnoteId);
           found = true;
           break;
         }
@@ -235,15 +290,25 @@ export function applyFootnotePresentation(blocks: FlowBlock[], displayNumber: nu
   // Prepend display number on the first paragraph.
   const first = out[0];
   if (first.kind === 'paragraph') {
-    const numberRun = {
-      kind: 'text' as const,
+    const firstPara = first as ParagraphBlock;
+    // Match the marker's font to the note text it precedes. Word renders the
+    // footnote number in the FootnoteText paragraph font; the FootnoteReference
+    // char style only adds superscript, not a face. Without this the synthetic
+    // run carries no fontFamily and the painter falls back to the inherited
+    // container default, so the number renders in a different font than the
+    // note text. When the note text itself has no explicit font we leave the
+    // marker unset too (both then inherit the same container font and match).
+    const firstTextRun = firstPara.runs.find((r) => r.kind === 'text') as TextRun | undefined;
+    const numberRun: TextRun = {
+      kind: 'text',
       text: `${displayNumber}  `,
       fontSize: FOOTNOTE_FONT_SIZE_PT,
       superscript: true,
+      ...(firstTextRun?.fontFamily ? { fontFamily: firstTextRun.fontFamily } : {}),
     };
     out[0] = {
-      ...(first as ParagraphBlock),
-      runs: [numberRun, ...(first as ParagraphBlock).runs],
+      ...firstPara,
+      runs: [numberRun, ...firstPara.runs],
     } as ParagraphBlock;
   }
 
@@ -361,29 +426,84 @@ export function buildFootnoteContentMap(
 // ============================================================================
 
 /**
+ * Distribute footnote items across `columns` balanced columns, preserving
+ * document order (footnotes must still read in numeric sequence). Items fill
+ * the first column until it reaches the balanced target height (≈ total / N),
+ * then spill into the next column — the same order-preserving balance Word
+ * applies to its footnote columns, not a greedy shortest-column packing
+ * (which would scramble the reading order).
+ *
+ * `columns <= 1` (the default for ordinary single-column footnotes) returns a
+ * single column unchanged, so callers that never opt into multi-column
+ * footnotes are byte-for-byte unaffected.
+ *
+ * Pure and shared by the reserved-height calculation (core) and the footnote
+ * painter (layout-painter) so the reserved area and the rendered columns are
+ * computed from the same partition.
+ */
+export function distributeFootnotesIntoColumns<T extends { height: number }>(
+  items: T[],
+  columns: number
+): T[][] {
+  const n = Math.max(1, Math.floor(columns));
+  if (n <= 1 || items.length <= 1) return [items];
+
+  const total = items.reduce((sum, item) => sum + item.height, 0);
+  const target = total / n;
+
+  const result: T[][] = [[]];
+  let columnHeight = 0;
+  for (const item of items) {
+    // Move to the next column once the current one has passed the balanced
+    // target (measured at the item's midpoint to avoid lopsided splits) and
+    // columns remain. Never leave a column empty.
+    if (result.length < n && columnHeight > 0 && columnHeight + item.height / 2 > target) {
+      result.push([]);
+      columnHeight = 0;
+    }
+    result[result.length - 1].push(item);
+    columnHeight += item.height;
+  }
+
+  return result;
+}
+
+/**
  * Calculate per-page footnote reserved heights.
  * Returns Map<pageNumber, reservedHeight>.
+ *
+ * With `columns > 1` the footnotes are balanced across that many columns and
+ * the reserved height is the tallest column (plus the separator), since the
+ * columns sit side by side — not the sum of every footnote height.
  */
 export function calculateFootnoteReservedHeights(
   pageFootnoteMap: Map<number, number[]>,
-  footnoteContentMap: Map<number, { height: number }>
+  footnoteContentMap: Map<number, { height: number }>,
+  columns: number = 1
 ): Map<number, number> {
   const reserved = new Map<number, number>();
 
   for (const [pageNumber, footnoteIds] of pageFootnoteMap) {
-    let totalHeight = 0;
+    const heights = footnoteIds
+      .map((fnId) => footnoteContentMap.get(fnId)?.height ?? 0)
+      .filter((h) => h > 0)
+      .map((height) => ({ height }));
 
-    for (const fnId of footnoteIds) {
-      const content = footnoteContentMap.get(fnId);
-      if (content) {
-        totalHeight += content.height;
-      }
-    }
+    if (heights.length === 0) continue;
 
-    if (totalHeight > 0) {
+    const cols = distributeFootnotesIntoColumns(heights, columns);
+    const tallestColumn = cols.reduce(
+      (max, col) =>
+        Math.max(
+          max,
+          col.reduce((sum, item) => sum + item.height, 0)
+        ),
+      0
+    );
+
+    if (tallestColumn > 0) {
       // Add separator height
-      totalHeight += FOOTNOTE_SEPARATOR_HEIGHT;
-      reserved.set(pageNumber, totalHeight);
+      reserved.set(pageNumber, tallestColumn + FOOTNOTE_SEPARATOR_HEIGHT);
     }
   }
 
@@ -398,10 +518,17 @@ export interface StabilizeFootnoteLayoutArgs {
   blocks: FlowBlock[];
   measures: Measure[];
   layoutOpts: LayoutOptions;
-  footnoteRefs: Array<{ footnoteId: number; pmPos: number }>;
+  footnoteRefs: FootnoteRefLocation[];
   footnoteContentMap: Map<number, FootnoteContent>;
   /** First-pass layout already computed by the caller without reserved heights. */
   initialLayout: Layout;
+  /**
+   * Number of columns the footnote area is laid out in (`w15:footnoteColumns`).
+   * Defaults to 1. When > 1, reserved heights are balanced across the columns
+   * (tallest column wins) instead of summing every footnote, and the value is
+   * written onto each footnote-bearing page as `page.footnoteColumns`.
+   */
+  footnoteColumns?: number;
 }
 
 export interface StabilizeFootnoteLayoutResult {
@@ -426,11 +553,13 @@ export function stabilizeFootnoteLayout(
   args: StabilizeFootnoteLayoutArgs
 ): StabilizeFootnoteLayoutResult {
   const { blocks, measures, layoutOpts, footnoteRefs, footnoteContentMap, initialLayout } = args;
+  const footnoteColumns = Math.max(1, args.footnoteColumns ?? 1);
 
   let pageFootnoteMap = mapFootnotesToPages(initialLayout.pages, footnoteRefs);
   let footnoteReservedHeights = calculateFootnoteReservedHeights(
     pageFootnoteMap,
-    footnoteContentMap
+    footnoteContentMap,
+    footnoteColumns
   );
 
   if (footnoteReservedHeights.size === 0) {
@@ -448,7 +577,8 @@ export function stabilizeFootnoteLayout(
     const nextPageFootnoteMap = mapFootnotesToPages(newLayout.pages, footnoteRefs);
     const nextFootnoteReservedHeights = calculateFootnoteReservedHeights(
       nextPageFootnoteMap,
-      footnoteContentMap
+      footnoteContentMap,
+      footnoteColumns
     );
 
     pageFootnoteMap = nextPageFootnoteMap;
@@ -469,7 +599,11 @@ export function stabilizeFootnoteLayout(
         footnoteReservedHeights: fallbackReservedHeights,
       });
       pageFootnoteMap = mapFootnotesToPages(newLayout.pages, footnoteRefs);
-      const requiredHeights = calculateFootnoteReservedHeights(pageFootnoteMap, footnoteContentMap);
+      const requiredHeights = calculateFootnoteReservedHeights(
+        pageFootnoteMap,
+        footnoteContentMap,
+        footnoteColumns
+      );
       if (footnoteReservedHeightsCover(fallbackReservedHeights, requiredHeights)) {
         fallbackCovered = true;
         break;
@@ -494,7 +628,10 @@ export function stabilizeFootnoteLayout(
 
   for (const [pageNum, fnIds] of pageFootnoteMap) {
     const page = newLayout.pages.find((p) => p.number === pageNum);
-    if (page) page.footnoteIds = fnIds;
+    if (page) {
+      page.footnoteIds = fnIds;
+      if (footnoteColumns > 1) page.footnoteColumns = footnoteColumns;
+    }
   }
 
   return { layout: newLayout, pageFootnoteMap, converged };

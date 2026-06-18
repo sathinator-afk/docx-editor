@@ -18,7 +18,11 @@ import { renderParagraphFragment } from '../renderParagraph';
 import { renderTableFragment } from '../renderTable';
 import { renderImageFragment } from '../renderImage';
 import { renderTextBoxFragment } from '../renderTextBox';
-import { FOOTNOTE_SEPARATOR_HEIGHT } from '../../layout-bridge/footnoteLayout';
+import {
+  FOOTNOTE_SEPARATOR_HEIGHT,
+  FOOTNOTE_COLUMN_GAP_PX,
+  distributeFootnotesIntoColumns,
+} from '../../layout-bridge/footnoteLayout';
 import type { RenderContext } from '../renderPage';
 
 /**
@@ -171,27 +175,40 @@ function renderPlainFootnoteItem(fn: FootnoteRenderItem, doc: Document): HTMLEle
   return fnEl;
 }
 
-export function calculateFootnoteAreaRenderHeight(footnotes: FootnoteRenderItem[]): number {
-  let height = FOOTNOTE_SEPARATOR_HEIGHT;
-  for (const fn of footnotes) {
-    if (fn.content) {
-      height += fn.content.height;
-    }
-  }
-  return height;
+export function calculateFootnoteAreaRenderHeight(
+  footnotes: FootnoteRenderItem[],
+  columns: number = 1
+): number {
+  const items = footnotes.filter((fn) => fn.content).map((fn) => ({ height: fn.content!.height }));
+  if (items.length === 0) return FOOTNOTE_SEPARATOR_HEIGHT;
+
+  // Multi-column footnotes sit side by side: the area is as tall as the tallest
+  // balanced column, not the sum of every footnote.
+  const partitions = distributeFootnotesIntoColumns(items, columns);
+  const tallestColumn = partitions.reduce(
+    (max, col) =>
+      Math.max(
+        max,
+        col.reduce((sum, item) => sum + item.height, 0)
+      ),
+    0
+  );
+  return FOOTNOTE_SEPARATOR_HEIGHT + tallestColumn;
 }
 
 export function renderFootnoteArea(
   footnotes: FootnoteRenderItem[],
   contentWidth: number,
   context: RenderContext,
-  doc: Document
+  doc: Document,
+  columns: number = 1
 ): HTMLElement {
   const container = doc.createElement('div');
   container.className = 'layout-footnote-area';
   container.style.width = `${contentWidth}px`;
 
-  // Separator line (33% width, Google Docs style)
+  // Separator line (33% width, Google Docs style). Spans the full area width,
+  // above the columns.
   const separator = doc.createElement('div');
   const separatorRuleHeight = 0.5;
   const separatorMargin = (FOOTNOTE_SEPARATOR_HEIGHT - separatorRuleHeight) / 2;
@@ -202,14 +219,52 @@ export function renderFootnoteArea(
   separator.style.marginTop = `${separatorMargin}px`;
   container.appendChild(separator);
 
-  // Render each footnote
-  for (const fn of footnotes) {
-    container.appendChild(
-      fn.content
-        ? renderMeasuredFootnoteContent(fn.content, contentWidth, context, doc)
-        : renderPlainFootnoteItem(fn, doc)
-    );
+  const renderItem = (fn: FootnoteRenderItem, width: number): HTMLElement =>
+    fn.content
+      ? renderMeasuredFootnoteContent(fn.content, width, context, doc)
+      : renderPlainFootnoteItem(fn, doc);
+
+  const columnCount = Math.max(1, Math.floor(columns));
+  if (columnCount <= 1) {
+    // Single-column footnotes: stack items full width (unchanged behaviour).
+    for (const fn of footnotes) {
+      container.appendChild(renderItem(fn, contentWidth));
+    }
+    return container;
   }
+
+  // Multi-column footnotes (w15:footnoteColumns). Balance the items across the
+  // columns — order-preserving, the same partition the reserved-height pass
+  // used — and lay the columns out side by side. Each footnote was measured at
+  // this column width upstream, so it wraps exactly as it paints.
+  // Clamp to >= 1px (matches the core measurement path) so a pathologically
+  // narrow page with many columns can't yield a zero/negative CSS width.
+  const columnWidth = Math.max(
+    1,
+    (contentWidth - (columnCount - 1) * FOOTNOTE_COLUMN_GAP_PX) / columnCount
+  );
+  const partitions = distributeFootnotesIntoColumns(
+    footnotes.map((fn) => ({ fn, height: fn.content?.height ?? 0 })),
+    columnCount
+  );
+
+  const columnsRow = doc.createElement('div');
+  columnsRow.className = 'layout-footnote-columns';
+  columnsRow.style.display = 'flex';
+  columnsRow.style.alignItems = 'flex-start';
+  columnsRow.style.gap = `${FOOTNOTE_COLUMN_GAP_PX}px`;
+
+  for (const partition of partitions) {
+    const columnEl = doc.createElement('div');
+    columnEl.className = 'layout-footnote-column';
+    columnEl.style.flex = `0 0 ${columnWidth}px`;
+    columnEl.style.width = `${columnWidth}px`;
+    for (const { fn } of partition) {
+      columnEl.appendChild(renderItem(fn, columnWidth));
+    }
+    columnsRow.appendChild(columnEl);
+  }
+  container.appendChild(columnsRow);
 
   return container;
 }

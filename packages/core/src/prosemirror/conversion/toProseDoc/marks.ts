@@ -103,10 +103,11 @@ export function textFormattingToMarks(
   }
 
   // Font size
-  if (formatting.fontSize) {
+  if (formatting.fontSize != null || formatting.fontSizeCs != null) {
     marks.push(
       schema.mark('fontSize', {
-        size: formatting.fontSize,
+        size: formatting.fontSize ?? null,
+        sizeCs: formatting.fontSizeCs ?? null,
       })
     );
   }

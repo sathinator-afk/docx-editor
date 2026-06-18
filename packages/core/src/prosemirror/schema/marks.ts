@@ -30,7 +30,8 @@ export interface UnderlineAttrs {
  * Font size mark attributes
  */
 export interface FontSizeAttrs {
-  size: number; // in half-points (OOXML format)
+  size?: number | null; // in half-points (OOXML format)
+  sizeCs?: number | null;
 }
 
 /**

@@ -16,6 +16,14 @@ export interface DocumentSettings {
    * if unspecified is 720 twips (0.5 inch).
    */
   defaultTabStop: number;
+  /**
+   * `w:defaultTableStyle` (§17.15.1.44) — the styleId applied to every
+   * newly created table in this document. Distinct from the type-default
+   * table style (`w:default="1"`), which is what tables inherit from when
+   * they carry no `w:tblStyle`. Absent in most documents; a template author
+   * sets it so inserted tables pick up the template's table look.
+   */
+  defaultTableStyle?: string;
 }
 
 /** OOXML default per §17.6.13 when `w:defaultTabStop` is absent. */
@@ -29,5 +37,14 @@ export function parseSettings(xml: string | null): DocumentSettings {
   const el = root ? findChild(root, 'w', 'defaultTabStop') : null;
   const raw = el ? parseInt(getAttribute(el, 'w', 'val') ?? '', 10) : NaN;
   const valid = Number.isFinite(raw) && raw > 0 && raw <= MAX_TAB_STOP_TWIPS;
-  return { defaultTabStop: valid ? raw : DEFAULT_TAB_STOP_TWIPS };
+
+  const defaultTableStyleEl = root ? findChild(root, 'w', 'defaultTableStyle') : null;
+  const defaultTableStyle = defaultTableStyleEl
+    ? (getAttribute(defaultTableStyleEl, 'w', 'val') ?? undefined) || undefined
+    : undefined;
+
+  return {
+    defaultTabStop: valid ? raw : DEFAULT_TAB_STOP_TWIPS,
+    ...(defaultTableStyle ? { defaultTableStyle } : {}),
+  };
 }

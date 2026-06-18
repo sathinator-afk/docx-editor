@@ -170,4 +170,60 @@ describe('continuous section break geometry', () => {
     ]);
     expect(balancedFragments.map((f) => f.x)).toEqual([50, 260]);
   });
+
+  test('continuous break that changes orientation is promoted to a page break (Word/LibreOffice)', () => {
+    // Mirrors a memo with a landscape table sandwiched between portrait prose:
+    //   portrait A → [continuous, landscape] → B (wide table) → [continuous, portrait] → C
+    // Word/LibreOffice cannot place two orientations on one physical sheet, so
+    // each orientation change is promoted to a page break. A, B, and C must
+    // each land on their own correctly-oriented page — B (the table) isolated,
+    // and C (e.g. the "Discussion") must NOT trail onto the landscape page.
+    const PORTRAIT = { w: 800, h: 1000 };
+    const LANDSCAPE = { w: 1200, h: 700 };
+    const M = { top: 50, right: 50, bottom: 50, left: 50 };
+
+    const A = para('a', 100);
+    // sb1 terminates the portrait section containing A; the section that BEGINS
+    // after it (containing B) is landscape, supplied by sb2's pageSize below.
+    const sb1: SectionBreakBlock = {
+      kind: 'sectionBreak',
+      id: 'sb1',
+      type: 'continuous',
+      pageSize: PORTRAIT,
+      margins: M,
+    };
+    const B = para('b', 100);
+    // sb2 terminates the landscape section containing B; the final (Discussion)
+    // section that begins after it is portrait (finalPageSize below).
+    const sb2: SectionBreakBlock = {
+      kind: 'sectionBreak',
+      id: 'sb2',
+      type: 'continuous',
+      pageSize: LANDSCAPE,
+      margins: M,
+    };
+    const C = para('c', 100);
+
+    const blocks: FlowBlock[] = [A.block, sb1, B.block, sb2, C.block];
+    const measures = [
+      A.measure,
+      { kind: 'sectionBreak' },
+      B.measure,
+      { kind: 'sectionBreak' },
+      C.measure,
+    ] as never;
+
+    const result = layoutDocument(blocks, measures, {
+      pageSize: PORTRAIT,
+      margins: M,
+      finalPageSize: PORTRAIT,
+      finalMargins: M,
+    });
+
+    // Three pages: portrait (A) → landscape (B) → portrait (C).
+    expect(result.pages.length).toBe(3);
+    expect(result.pages[0].size).toEqual(PORTRAIT);
+    expect(result.pages[1].size).toEqual(LANDSCAPE);
+    expect(result.pages[2].size).toEqual(PORTRAIT);
+  });
 });
