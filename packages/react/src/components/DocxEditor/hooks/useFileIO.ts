@@ -93,10 +93,18 @@ export function useFileIO({
           // which selective save can't handle since the affected paragraphs may not
           // be in changedParaIds)
           const hasInjectedReplies = comments.some((c) => c.parentId != null);
+          // Footnotes/endnotes live in package-level parts (word/footnotes.xml),
+          // not in the paragraph-level selective diff — so a note added or edited
+          // in-memory is invisible to selective save and would be silently
+          // dropped. Force a full repack whenever the document carries notes, so
+          // serializeFootnotesToZip re-emits them (and registers the part).
+          const hasNotes =
+            (agentDoc.package.footnotes?.length ?? 0) > 0 ||
+            (agentDoc.package.endnotes?.length ?? 0) > 0;
           selectiveOptions = {
             selective: {
               changedParaIds: getChangedParagraphIds(editorState),
-              structuralChange: hasStructuralChanges(editorState) || hasInjectedReplies,
+              structuralChange: hasStructuralChanges(editorState) || hasInjectedReplies || hasNotes,
               hasUntrackedChanges: hasUntrackedChanges(editorState),
             },
           };

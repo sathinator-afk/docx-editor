@@ -51,6 +51,7 @@ export interface DocxEditorHandle extends EditorHandle {
         author: string;
         search?: string;
     }) => number | null;
+    getAgent: () => DocumentAgent | null;
     getComments: () => Comment_2[];
     replyToComment: (commentId: number, text: string, author: string) => number | null;
     resolveComment: (commentId: number) => void;

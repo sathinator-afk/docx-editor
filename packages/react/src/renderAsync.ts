@@ -27,6 +27,7 @@ import { DocxEditor, type DocxEditorProps, type DocxEditorRef } from './componen
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
+import type { DocumentAgent } from '@eigenpal/docx-editor-core/agent';
 import type { EditorHandle } from '@eigenpal/docx-editor-core';
 
 /**
@@ -51,11 +52,21 @@ export interface DocxEditorHandle extends EditorHandle {
   getComments: () => Comment[];
   /** Add a comment, anchored by Word `w14:paraId` (+ optional unique `search`
    * phrase within that paragraph). Returns the comment id, or null. */
-  addComment: (options: { paraId: string; text: string; author: string; search?: string }) => number | null;
+  addComment: (options: {
+    paraId: string;
+    text: string;
+    author: string;
+    search?: string;
+  }) => number | null;
   /** Reply to an existing comment thread. Returns the reply id, or null. */
   replyToComment: (commentId: number, text: string, author: string) => number | null;
   /** Resolve (mark done) a comment. */
   resolveComment: (commentId: number) => void;
+  /** The underlying {@link DocumentAgent}, whose `getDocument()` is the exact
+   * Document `save()` serializes — so a host can author package-level parts
+   * (e.g. footnotes/endnotes) that ride through the save merge. Null until the
+   * document has loaded. */
+  getAgent: () => DocumentAgent | null;
 }
 
 /**
@@ -91,6 +102,7 @@ export function renderAsync(
         });
       },
       getDocument: () => ref.current?.getDocument() ?? null,
+      getAgent: () => ref.current?.getAgent() ?? null,
       getComments: () => ref.current?.getComments() ?? [],
       addComment: (options) => ref.current?.addComment(options) ?? null,
       replyToComment: (commentId, text, author) =>
