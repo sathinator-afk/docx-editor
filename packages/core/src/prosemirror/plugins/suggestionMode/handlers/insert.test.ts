@@ -111,6 +111,31 @@ describe('applyTrackedParagraphInsert', () => {
     expect(view.state.doc.firstChild!.firstChild!.marks.length).toBe(0);
   });
 
+  test('inserting at the very END of the document does not throw (regression)', () => {
+    // Cursor at the top-level end boundary (insertAt === doc.content.size). This
+    // is the position the JS bridge clamps `to` to, and it used to throw
+    // `RangeError: There is no position before the top-level node`.
+    const view = fakeView(docOf('Intro.'));
+    const end = view.state.doc.content.size; // top-level boundary, not inside a paragraph
+    const attrs = applyTrackedParagraphInsert(view as never, end, end, ['Alpha', 'Beta'], {
+      active: true,
+      author: 'AI',
+    });
+    expect(attrs).not.toBeNull();
+    const rev = attrs!.revisionId;
+    // Both inserted runs landed as tracked insertions sharing one revision id.
+    const runs = insertedRuns(view.state);
+    expect(runs.map((r) => r[0])).toEqual(['Alpha', 'Beta']);
+    expect(runs.every((r) => r[1] === rev)).toBe(true);
+    // One new paragraph break for two inserted paragraphs at end-of-doc; the
+    // trailing paragraph must NOT carry pPrIns, and exactly one earlier para must.
+    const paras = paragraphs(view.state);
+    expect(paras[paras.length - 1][1]).toBeNull();
+    expect(paras.filter((p) => p[1] === rev).length).toBe(1);
+    // The original "Intro." text survives un-marked.
+    expect(view.state.doc.textContent).toContain('Intro.');
+  });
+
   test('single paragraph inserts inline with no new paragraph break', () => {
     const view = fakeView(docOf('Start.'));
     const at = view.state.doc.content.size - 1;

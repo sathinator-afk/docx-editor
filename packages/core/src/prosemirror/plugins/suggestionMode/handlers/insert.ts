@@ -264,13 +264,26 @@ export function applyTrackedParagraphInsert(
   //    (paras.length - 1) blocks. Each break BUT the trailing one is new (the
   //    last block keeps the original paragraph's pre-existing end mark), so the
   //    first (paras.length - 1) affected paragraphs get pPrIns.
-  const $at = tr.doc.resolve(insertAt);
-  let paraPos = $at.before($at.depth);
-  for (let i = 0; i < paras.length - 1; i++) {
-    const para = tr.doc.nodeAt(paraPos);
-    if (!para || para.type.name !== 'paragraph') break;
-    tr.setNodeMarkup(paraPos, undefined, { ...para.attrs, pPrIns: insertAttrs });
-    paraPos += para.nodeSize; // setNodeMarkup preserves size
+  //
+  //    Resolve the host paragraph carefully: when the slice is spliced at a
+  //    top-level boundary (e.g. the very END of the document, insertAt ===
+  //    doc.content.size), resolve(insertAt) returns depth 0 and before() would
+  //    throw `RangeError: There is no position before the top-level node`. The
+  //    open-start slice merges its first paragraph into the block just BEFORE
+  //    that boundary, so step back one position to land inside that host.
+  const size = tr.doc.content.size;
+  let $at = tr.doc.resolve(Math.min(insertAt, size));
+  if ($at.depth === 0 && insertAt > 0) {
+    $at = tr.doc.resolve(Math.min(insertAt, size) - 1);
+  }
+  if ($at.depth > 0) {
+    let paraPos = $at.before($at.depth);
+    for (let i = 0; i < paras.length - 1; i++) {
+      const para = tr.doc.nodeAt(paraPos);
+      if (!para || para.type.name !== 'paragraph') break;
+      tr.setNodeMarkup(paraPos, undefined, { ...para.attrs, pPrIns: insertAttrs });
+      paraPos += para.nodeSize; // setNodeMarkup preserves size
+    }
   }
 
   view.dispatch(tr.scrollIntoView());
