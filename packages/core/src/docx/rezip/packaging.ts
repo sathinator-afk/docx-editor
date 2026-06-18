@@ -27,6 +27,12 @@ const HEADER_CONTENT_TYPE =
 const FOOTER_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml';
 
+const FOOTNOTES_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml';
+
+const ENDNOTES_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml';
+
 export const COMMENTS_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
 
@@ -242,15 +248,62 @@ export async function serializeCommentsToZip(
 }
 
 /**
+ * Register a single note part (`word/footnotes.xml` / `word/endnotes.xml`) in
+ * `[Content_Types].xml` and `word/_rels/document.xml.rels` when it isn't already
+ * declared. A document that carried the notes already declares both, so the
+ * `includes` guards make this a no-op on round-trip; but a note AUTHORED into a
+ * document that never had the part needs the override + relationship or Word
+ * rejects the orphaned part. Mirrors {@link ensureAllCommentParts}.
+ */
+async function ensureNotePart(
+  zip: JSZip,
+  part: { partName: string; contentType: string; target: string; relType: string },
+  compressionLevel: number
+): Promise<void> {
+  const ctFile = zip.file('[Content_Types].xml');
+  if (ctFile) {
+    let ctXml = await ctFile.async('text');
+    if (!ctXml.includes(part.partName)) {
+      ctXml = ctXml.replace(
+        '</Types>',
+        `<Override PartName="${part.partName}" ContentType="${part.contentType}"/></Types>`
+      );
+      zip.file('[Content_Types].xml', ctXml, {
+        compression: 'DEFLATE',
+        compressionOptions: { level: compressionLevel },
+      });
+    }
+  }
+
+  const relsPath = 'word/_rels/document.xml.rels';
+  let relsXml = await readRelsOrStub(zip, relsPath);
+  if (!relsXml.includes(`Target="${part.target}"`)) {
+    const newRId = `rId${findMaxRId(relsXml) + 1}`;
+    relsXml = relsXml.replace(
+      '</Relationships>',
+      `<Relationship Id="${newRId}" Type="${part.relType}" Target="${part.target}"/></Relationships>`
+    );
+    zip.file(relsPath, relsXml, {
+      compression: 'DEFLATE',
+      compressionOptions: { level: compressionLevel },
+    });
+  }
+}
+
+/**
  * Serialize footnotes into `word/footnotes.xml`.
  *
  * Re-emits separator notes (kept in `footnoteSeparators`) ahead of the normal
  * notes, mirroring Word's ordering. Only writes when the document actually has
- * footnotes; otherwise the original part is left untouched. Content-type / rels
- * registration is skipped on purpose — a document that carries footnotes
- * already declares the part, and notes-from-scratch is out of scope here.
+ * footnotes. Registers the content-type override + document relationship via
+ * {@link ensureNotePart} so notes authored into a previously note-less document
+ * produce a Word-valid package (idempotent on round-trip).
  */
-export function serializeFootnotesToZip(doc: Document, zip: JSZip, compressionLevel: number): void {
+export async function serializeFootnotesToZip(
+  doc: Document,
+  zip: JSZip,
+  compressionLevel: number
+): Promise<void> {
   const normal = doc.package.footnotes ?? [];
   const separators = doc.package.footnoteSeparators ?? [];
   if (normal.length === 0 && separators.length === 0) return;
@@ -260,12 +313,26 @@ export function serializeFootnotesToZip(doc: Document, zip: JSZip, compressionLe
     compression: 'DEFLATE',
     compressionOptions: { level: compressionLevel },
   });
+  await ensureNotePart(
+    zip,
+    {
+      partName: '/word/footnotes.xml',
+      contentType: FOOTNOTES_CONTENT_TYPE,
+      target: 'footnotes.xml',
+      relType: RELATIONSHIP_TYPES.footnotes,
+    },
+    compressionLevel
+  );
 }
 
 /**
  * Serialize endnotes into `word/endnotes.xml`. See {@link serializeFootnotesToZip}.
  */
-export function serializeEndnotesToZip(doc: Document, zip: JSZip, compressionLevel: number): void {
+export async function serializeEndnotesToZip(
+  doc: Document,
+  zip: JSZip,
+  compressionLevel: number
+): Promise<void> {
   const normal = doc.package.endnotes ?? [];
   const separators = doc.package.endnoteSeparators ?? [];
   if (normal.length === 0 && separators.length === 0) return;
@@ -275,6 +342,16 @@ export function serializeEndnotesToZip(doc: Document, zip: JSZip, compressionLev
     compression: 'DEFLATE',
     compressionOptions: { level: compressionLevel },
   });
+  await ensureNotePart(
+    zip,
+    {
+      partName: '/word/endnotes.xml',
+      contentType: ENDNOTES_CONTENT_TYPE,
+      target: 'endnotes.xml',
+      relType: RELATIONSHIP_TYPES.endnotes,
+    },
+    compressionLevel
+  );
 }
 
 /**

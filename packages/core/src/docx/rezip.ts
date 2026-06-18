@@ -152,8 +152,8 @@ export async function repackDocx(doc: Document, options: RepackOptions = {}): Pr
   await serializeCommentsToZip(exportDocument, newZip, compressionLevel);
 
   // Serialize footnotes/endnotes (note-body edits + tracked changes)
-  serializeFootnotesToZip(exportDocument, newZip, compressionLevel);
-  serializeEndnotesToZip(exportDocument, newZip, compressionLevel);
+  await serializeFootnotesToZip(exportDocument, newZip, compressionLevel);
+  await serializeEndnotesToZip(exportDocument, newZip, compressionLevel);
 
   // Optionally update modification date in docProps/core.xml
   if (updateModifiedDate) {
@@ -242,8 +242,8 @@ export async function repackDocxFromRaw(
   await serializeCommentsToZip(exportDocument, newZip, compressionLevel);
 
   // Serialize footnotes/endnotes (note-body edits + tracked changes)
-  serializeFootnotesToZip(exportDocument, newZip, compressionLevel);
-  serializeEndnotesToZip(exportDocument, newZip, compressionLevel);
+  await serializeFootnotesToZip(exportDocument, newZip, compressionLevel);
+  await serializeEndnotesToZip(exportDocument, newZip, compressionLevel);
 
   // Optionally update core properties
   if (updateModifiedDate && rawContent.corePropsXml) {
