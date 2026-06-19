@@ -108,6 +108,7 @@ export interface DocxEditorProps {
     renderLogo?: () => ReactNode;
     renderTitleBarRight?: () => ReactNode;
     rulerUnit?: 'inch' | 'cm';
+    showFloatingCommentButton?: boolean;
     showMarginGuides?: boolean;
     showOutline?: boolean;
     showOutlineButton?: boolean;

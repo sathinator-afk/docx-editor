@@ -60,6 +60,7 @@
       "pluginSidebarItems": "Sidebar plugin items. Pairs with the Vue plugin-api gap.",
       "printOptions": "Print configuration. Vue uses onPrint without options object.",
       "rulerUnit": "Ruler unit toggle (inch/cm). Vue uses inch only currently.",
+      "showFloatingCommentButton": "Toggles the on-selection floating comment button. React-only; hosts with their own comment-add chrome (e.g. cunei) hide it. Vue adapter can adopt it if needed.",
       "showMarginGuides": "Margin guide overlay. Pairs with marginGuideColor \u2014 both deferred together."
     },
     "vueExclusive": {

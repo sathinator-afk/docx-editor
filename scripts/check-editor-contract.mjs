@@ -36,6 +36,9 @@ const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   'pluginSidebarItems',
   'pluginRenderedDomContext',
   'agentPanel',
+  // React-only: hosts with their own comment-add chrome (cunei) hide the
+  // on-selection floating comment button. Vue adapter can adopt it if needed.
+  'showFloatingCommentButton',
 ]);
 
 function extractInterfaceBody(source, name) {

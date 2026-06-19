@@ -107,6 +107,7 @@ export function DocxEditorPagedArea({
   onTotalPagesChange,
   // Floating comment button
   floatingCommentBtn,
+  showFloatingCommentButton = true,
   isAddingComment,
   setCommentSelectionRange,
   setAddCommentYPosition,
@@ -183,6 +184,7 @@ export function DocxEditorPagedArea({
   setAddCommentYPosition: React.Dispatch<React.SetStateAction<number | null>>;
   setIsAddingComment: React.Dispatch<React.SetStateAction<boolean>>;
   setFloatingCommentBtn: React.Dispatch<React.SetStateAction<{ top: number; left: number } | null>>;
+  showFloatingCommentButton?: boolean;
 }) {
   // Resolve the active HF block for the inline editor — first-page variant
   // wins when `titlePg` is set and the user double-clicked page 1.
@@ -413,7 +415,7 @@ export function DocxEditorPagedArea({
         }
       />
 
-      {floatingCommentBtn != null && !isAddingComment && !readOnly && (
+      {floatingCommentBtn != null && !isAddingComment && !readOnly && showFloatingCommentButton && (
         <Tooltip content="Add comment" side="bottom" delayMs={300}>
           <button
             type="button"

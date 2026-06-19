@@ -180,6 +180,9 @@ export interface DocxEditorProps {
   showOutline?: boolean;
   /** Whether to show the floating outline toggle button (default: true) */
   showOutlineButton?: boolean;
+  /** Whether to show the floating "Add comment" button on a selection (default: true).
+   *  Hosts with their own comment-add UI can hide it to avoid redundant chrome. */
+  showFloatingCommentButton?: boolean;
   /**
    * Custom list of fonts shown in the toolbar's font-family dropdown.
    * Strings render in the "Other" group; pass `FontOption[]` for category
@@ -598,6 +601,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     loadingIndicator,
     showOutline: showOutlineProp = false,
     showOutlineButton = true,
+    showFloatingCommentButton = true,
     fontFamilies,
     fonts,
     watermarkPresets,
@@ -1769,6 +1773,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
               );
             }}
             floatingCommentBtn={floatingCommentBtn}
+            showFloatingCommentButton={showFloatingCommentButton}
             isAddingComment={isAddingComment}
             setCommentSelectionRange={setCommentSelectionRange}
             setAddCommentYPosition={setAddCommentYPosition}
