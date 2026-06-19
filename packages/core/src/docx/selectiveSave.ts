@@ -39,9 +39,12 @@ function hasNewImagesOrHyperlinks(blocks: BlockContent[]): boolean {
   const runHasNewImage = (run: {
     content: { type: string; image?: { src?: string; rId?: string } }[];
   }): boolean =>
-    run.content.some(
-      (c) => c.type === 'drawing' && c.image?.src?.startsWith('data:') && !c.image?.rId
-    );
+    // A `data:` src means the bytes are inline and NOT yet a word/media part —
+    // it always needs full-repack registration (processNewImages), even if the
+    // editor stamped a temporary rId on insert. The old `!c.image.rId` guard
+    // missed editor-inserted images (which DO carry a temp rId) and let
+    // selective save emit a dangling r:embed with no media part / relationship.
+    run.content.some((c) => c.type === 'drawing' && c.image?.src?.startsWith('data:'));
 
   for (const block of blocks) {
     if (block.type === 'paragraph') {
