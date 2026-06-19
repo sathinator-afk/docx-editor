@@ -186,6 +186,17 @@ export async function processNewImages(
     const relEntries: string[] = [];
 
     for (const image of images) {
+      // Already persisted by a prior save? The image keeps its data: src (so the
+      // live editor can still render it), but its rId now resolves to a media part
+      // carried over in this repack. Reuse it instead of writing a duplicate —
+      // otherwise every autosave appends image{N+1}.<ext> and bloats word/media.
+      if (image.rId) {
+        const existingTarget = findRelTargetById(relsXml, image.rId);
+        if (existingTarget && zip.file(`word/${normalizeMediaTarget(existingTarget)}`)) {
+          continue; // part + relationship already exist; keep the current rId
+        }
+      }
+
       const { data, extension } = decodeDataUrl(image.src!);
 
       maxImageNum++;
@@ -222,6 +233,19 @@ export async function processNewImages(
 /** Normalize a rels Target to its `media/<file>` form for comparison. */
 function normalizeMediaTarget(target: string): string {
   return target.replace(/^\.?\/?(?:word\/)?/, '');
+}
+
+/** Find a relationship's Target by its Id (inverse of findRelIdByMediaTarget). */
+function findRelTargetById(relsXml: string, rId: string): string | null {
+  const re = /<Relationship\b[^>]*?>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(relsXml)) !== null) {
+    const el = m[0];
+    if (/Id="([^"]*)"/.exec(el)?.[1] === rId) {
+      return /Target="([^"]*)"/.exec(el)?.[1] ?? null;
+    }
+  }
+  return null;
 }
 
 /** Find an existing relationship id in a rels XML whose Target points at `mediaTarget`. */
