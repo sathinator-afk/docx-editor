@@ -116,6 +116,10 @@ describe('toProseDoc/fromProseDoc run boundaries', () => {
       'run',
       'run',
       'commentRangeEnd',
+      // The save path emits the comment's reference run right after the range end
+      // (its ECMA-376 anchor) so editor-created comments keep their <w:commentReference>.
+      // See eigenpal/docx-editor#837 + comment-reference-pm-roundtrip.test.ts.
+      'commentReference',
     ]);
     expect(runTexts(outParagraph)).toEqual(['one', 'two']);
   });
