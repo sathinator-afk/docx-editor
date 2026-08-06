@@ -204,7 +204,12 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
   // EditorView when the handle lives inside `.layout-page-header/footer`,
   // not on the body PM (which would corrupt the body doc with stray
   // colWidth changes at out-of-range positions).
-  const tableResize = useTableResizeState({ hiddenPMRef, getActiveHfView: getHfView });
+  const {
+    tryStartFromMouseDown: tryStartTableResize,
+    handleMouseMoveUpdate: updateTableResize,
+    tryCommit: commitTableResize,
+    isAnyResizeActive,
+  } = useTableResizeState({ hiddenPMRef, getActiveHfView: getHfView });
 
   // Cell-drag selection state machine (shared with Vue via core).
   const cellDragRef = useRef(createCellDragTracker());
@@ -364,6 +369,21 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     [activeSurface]
   );
 
+  /**
+   * Finish every kind of page gesture through one idempotent exit. WebKit can
+   * omit `mouseup` when a drag leaves WKWebView, while pointer cancellation,
+   * window blur, or a later no-button move still arrives. Keeping table,
+   * cell, text, and auto-scroll cleanup together prevents any one path from
+   * leaving the selection attached to subsequent mouse movement.
+   */
+  const finishPointerGesture = useCallback(() => {
+    commitTableResize();
+    isDraggingRef.current = false;
+    cellDragRef.current.end();
+    stopDragAutoScroll();
+    // Keep dragAnchorRef for potential shift-click extension.
+  }, [commitTableResize, stopDragAutoScroll]);
+
   const handlePagesMouseDown = useCallback(
     (e: React.MouseEvent) => {
       const surface = activeSurface();
@@ -375,6 +395,11 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
         return;
       }
       if (e.button !== 0) return;
+
+      // A release outside WKWebView may not deliver mouseup. Always retire a
+      // stale gesture before beginning a new primary-button interaction so
+      // the first drag after re-entry starts from this click, not an old anchor.
+      finishPointerGesture();
 
       // Any mousedown hides the floating table-insert button.
       setTableInsertButton(null);
@@ -419,10 +444,10 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       }
 
       // Table resize handles (column-between, row, right-edge). Body OR
-      // header tables — `tableResize.tryStartFromMouseDown` doesn't care
+      // header tables — `tryStartTableResize` doesn't care
       // which document the cells belong to, only that the click landed on
       // a `.layout-table-*-handle`.
-      if (tableResize.tryStartFromMouseDown(target, e)) return;
+      if (tryStartTableResize(target, e)) return;
 
       // Image click → NodeSelection on the active doc.
       const imageEl = coreFindImageElement(target);
@@ -475,7 +500,8 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       onBodyClick,
       getPositionFromMouse,
       findCellPosFromPmPos,
-      tableResize,
+      tryStartTableResize,
+      finishPointerGesture,
       clearTableInsertTimer,
       setSelectedImageInfo,
       setSelectionRects,
@@ -498,9 +524,17 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
 
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
+      // Self-heal after a mouseup that occurred outside WKWebView. `buttons`
+      // describes the current physical state; do not extend a stale selection
+      // even once before ending it.
+      if ((e.buttons & 1) === 0) {
+        finishPointerGesture();
+        return;
+      }
+
       // Table resize drag — one of column / row / right-edge updates the
       // visual handle and the tentative width / height.
-      if (tableResize.handleMouseMoveUpdate(e)) return;
+      if (updateTableResize(e)) return;
 
       if (!isDraggingRef.current || dragAnchorRef.current === null) return;
       const surface = activeSurface();
@@ -523,34 +557,46 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     [
       activeSurface,
       getPositionFromMouse,
-      findCellPosFromPmPos,
       updateDragScroll,
-      tableResize,
+      updateTableResize,
+      finishPointerGesture,
       pagesContainerRef,
     ]
   );
 
-  const handleMouseUp = useCallback(() => {
-    // Resize commit (column / row / right-edge) takes priority.
-    if (tableResize.tryCommit()) return;
+  // Keep the installed window listeners stable across React renders. Selection
+  // dispatches can re-render the editor for every drag tick; detaching and
+  // reattaching global listeners in those renders creates a race where the
+  // release is missed. The refs provide the latest closures without listener
+  // churn.
+  const handleMouseMoveRef = useRef(handleMouseMove);
+  const finishPointerGestureRef = useRef(finishPointerGesture);
+  handleMouseMoveRef.current = handleMouseMove;
+  finishPointerGestureRef.current = finishPointerGesture;
 
-    isDraggingRef.current = false;
-    cellDragRef.current.end();
-    stopDragAutoScroll();
-    // Keep dragAnchorRef for potential shift-click extension.
-  }, [stopDragAutoScroll, tableResize]);
-
-  // Global mousemove / mouseup listeners — drag selection escapes the
-  // pagesContainer once you mouse out of it, so the listeners must live on
-  // window.
   useEffect(() => {
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+    const onMouseMove = (e: MouseEvent) => handleMouseMoveRef.current(e);
+    const finish = () => finishPointerGestureRef.current();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') finish();
     };
-  }, [handleMouseMove, handleMouseUp]);
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', finish);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    window.addEventListener('blur', finish);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', finish);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      window.removeEventListener('blur', finish);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      finish();
+    };
+  }, []);
 
   const handlePagesMouseMove = useCallback(
     (e: React.MouseEvent) => {
@@ -559,7 +605,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
         readOnly ||
         isDraggingRef.current ||
         cellDragRef.current.isCellDragging ||
-        tableResize.isAnyResizeActive()
+        isAnyResizeActive()
       )
         return;
 
@@ -599,7 +645,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       });
       clearTableInsertTimer();
     },
-    [readOnly, clearTableInsertTimer, hfEditMode, pagesContainerRef]
+    [readOnly, clearTableInsertTimer, hfEditMode, pagesContainerRef, isAnyResizeActive]
   );
 
   const handleTableInsertClick = useCallback(
